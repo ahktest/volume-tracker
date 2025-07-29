@@ -1,41 +1,48 @@
-// scripts/fetchVolume.js
 require('dotenv').config();
 const axios = require('axios');
-const fs = require('fs');
-const path = require('path');
+const mysql = require('mysql2/promise');
 
-const API_KEY = process.env.CMC_API_KEY;
-const API_URL = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest';
+// Veritabanı bağlantısı
+async function connectDB() {
+  return await mysql.createConnection({
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASS,
+    database: process.env.DB_NAME,
+  });
+}
 
-const fetchVolume = async () => {
+// Veri çekme ve veritabanına yazma
+async function fetchAndSaveVolume() {
   try {
-    const response = await axios.get(API_URL, {
+    const response = await axios.get('https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest', {
       headers: {
-        'X-CMC_PRO_API_KEY': API_KEY
+        'X-CMC_PRO_API_KEY': process.env.CMC_API_KEY,
       },
       params: {
-        start: 1,
-        limit: 20, // İstersen artır
-        convert: 'USD'
-      }
+        limit: 10, // İlk 10 coin için örnek
+        convert: 'USD',
+      },
     });
 
-    const data = response.data.data.map(coin => ({
-      name: coin.name,
-      symbol: coin.symbol,
-      price: coin.quote.USD.price,
-      volume_24h: coin.quote.USD.volume_24h,
-      market_cap: coin.quote.USD.market_cap
-    }));
+    const connection = await connectDB();
+    const coins = response.data.data;
 
-    // Kaydet
-    const savePath = path.join(__dirname, '../data/current.json');
-    fs.writeFileSync(savePath, JSON.stringify(data, null, 2));
+    for (const coin of coins) {
+      const { symbol, quote } = coin;
+      const volume = quote.USD.volume_24h;
 
-    console.log(`[${new Date().toISOString()}] Veri çekildi ve kaydedildi.`);
+      await connection.execute(
+        'INSERT INTO volume_history (symbol, volume) VALUES (?, ?)',
+        [symbol, volume]
+      );
+    }
+
+    console.log('Veriler başarıyla kaydedildi.');
+    await connection.end();
   } catch (error) {
-    console.error('Veri çekme hatası:', error.response?.data || error.message);
+    console.error('Hata oluştu:', error.message);
   }
-};
+}
 
-fetchVolume();
+fetchAndSaveVolume();
