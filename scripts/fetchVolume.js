@@ -20,7 +20,7 @@ async function fetchAndSaveVolume() {
         'X-CMC_PRO_API_KEY': process.env.CMC_API_KEY,
       },
       params: {
-        limit: 10, // İlk 10 coin için örnek
+        limit: 200, // İlk 200 coin için örnek
         convert: 'USD',
       },
     });
@@ -29,14 +29,15 @@ async function fetchAndSaveVolume() {
     const coins = response.data.data;
 
     for (const coin of coins) {
-      const { symbol, quote } = coin;
-      const volume = quote.USD.volume_24h;
+  const slug = coin.slug;
+  const symbol = coin.symbol;
+  const volume = coin.quote.USD.volume_24h;
+  const marketcap = coin.quote.USD.market_cap;
 
-      await connection.execute(
-        'INSERT INTO volume_history (symbol, volume) VALUES (?, ?)',
-        [symbol, volume]
-      );
-    }
+  const query = 'INSERT INTO volume_data (timestamp, slug, symbol, volume, marketcap) VALUES (?, ?, ?, ?, ?)';
+  await connection.execute(query, [timestamp, slug, symbol, volume, marketcap]);
+}
+
 
     console.log('Veriler başarıyla kaydedildi.');
     await connection.end();
