@@ -2,6 +2,8 @@ require('dotenv').config();
 const axios = require('axios');
 const mysql = require('mysql2/promise');
 const apiKey = process.env.CMC_API_KEY;
+console.log(`[${new Date().toISOString()}] Cron çalıştı.`);
+
 // Veritabanı bağlantısı
 async function connectDB() {
   return await mysql.createConnection({
