@@ -3,6 +3,8 @@ const axios = require('axios');
 const mysql = require('mysql2/promise');
 const apiKey = process.env.CMC_API_KEY;
 console.log(`[${new Date().toISOString()}] Cron çalıştı.`);
+console.log('API KEY:', process.env.CMC_API_KEY);
+
 
 // Veritabanı bağlantısı
 async function connectDB() {
