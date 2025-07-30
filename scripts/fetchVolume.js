@@ -1,4 +1,6 @@
-require('dotenv').config();
+require('dotenv').config({ path: __dirname + '/../.env' });
+
+//require('dotenv').config();
 const axios = require('axios');
 const mysql = require('mysql2/promise');
 const apiKey = process.env.CMC_API_KEY;
