@@ -42,10 +42,8 @@ async function fetchAndSaveVolume() {
   const price = coin.quote?.USD?.price || 0;
 
 
-  const query = `
-  INSERT INTO volume_data (symbol, volume, marketcap, slug, price) VALUES (?, ?, ?, ?, ?)`;
-const values = [symbol, volume, marketcap, slug, price];
-
+  const query = 'INSERT INTO volume_data (slug, symbol, volume, marketcap, price) VALUES (?, ?, ?, ?, ?)';
+  await connection.execute(query, [slug, symbol, volume, marketcap, price]);
 }
 
 
