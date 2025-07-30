@@ -43,9 +43,7 @@ async function fetchAndSaveVolume() {
 
 
   const query = `
-  INSERT INTO volume_data (symbol, volume, marketcap, slug, price)
-  VALUES (?, ?, ?, ?, ?)
-`;
+  INSERT INTO volume_data (symbol, volume, marketcap, slug, price) VALUES (?, ?, ?, ?, ?)`;
 const values = [symbol, volume, marketcap, slug, price];
 
 }
