@@ -11,6 +11,21 @@ function formatNumber(num) {
   }
 }
 
+function formatPrice(price) {
+  if (price >= 1000) {
+    return Number(price).toLocaleString(undefined, { maximumFractionDigits: 0 });
+  } else if (price >= 1) {
+    return Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  } else if (price >= 0.01) {
+    return Number(price).toFixed(4);
+  } else if (price >= 0.0001) {
+    return Number(price).toFixed(6);
+  } else {
+    return Number(price).toFixed(8);
+  }
+}
+
+
 // Artan hacim tablosunu dolduran fonksiyon
 async function fetchIncreaseData() {
   try {
@@ -25,7 +40,8 @@ async function fetchIncreaseData() {
       tr.innerHTML = `
         <td data-label="#">${idx + 1}</td>
         <td data-label="Symbol">${coin.symbol}</td>
-        <td data-label="Fiyat">${Number(coin.price).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 8})}</td>
+        <td data-label="Fiyat">${formatPrice(coin.price)}</td>
+
         <td data-label="MarketCap">${formatNumber(coin.marketcap)}</td>
         <td data-label="Son Zaman">${new Date(coin.ltime).toLocaleString()}</td>
         <td data-label="4h Önce">${new Date(coin.ptime).toLocaleString()}</td>
@@ -59,7 +75,8 @@ async function fetchDecreaseData() {
       tr.innerHTML = `
         <td data-label="#">${idx + 1}</td>
         <td data-label="Symbol">${coin.symbol}</td>
-        <td data-label="Fiyat">${Number(coin.price).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 8})}</td>
+        <td data-label="Fiyat">${formatPrice(coin.price)}</td>
+
         <td data-label="MarketCap">${formatNumber(coin.marketcap)}</td>
         <td data-label="Son Zaman">${new Date(coin.ltime).toLocaleString()}</td>
         <td data-label="4h Önce">${new Date(coin.ptime).toLocaleString()}</td>
