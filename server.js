@@ -2,10 +2,6 @@ require('dotenv').config({ path: __dirname + '/.env' });
 const express = require("express");
 const mysql = require("mysql2");
 const cors = require("cors");
-console.log('nedir aga durum 1');
-//require("dotenv").config();
-console.log("ENV test ->", process.env.DB_USER, process.env.DB_PASS);
-
 
 
 const app = express();
@@ -29,8 +25,6 @@ app.get("/ping", (req, res) => {
 
 // API: Son veri çekim tarihindeki en yüksek hacim artışı
 app.get("/top-gainers", (req, res) => {
-  console.log("🟢 /top-gainers isteği alındı");
-  console.log('nedir aga  durum 2');
 //require("dotenv").config();
 console.log("ENV test ->", process.env.DB_USER, process.env.DB_PASSWORD);
 
