@@ -4,7 +4,7 @@ const mysql = require("mysql2");
 const cors = require("cors");
 console.log('nedir aga durum 1');
 //require("dotenv").config();
-console.log("ENV test ->", process.env.DB_USER, process.env.DB_PASSWORD);
+console.log("ENV test ->", process.env.DB_USER, process.env.DB_PASS);
 
 
 
@@ -18,7 +18,7 @@ app.use(express.json());
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
+  password: process.env.DB_PASS,
   database: process.env.DB_NAME,
 });
 
