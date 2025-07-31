@@ -17,6 +17,11 @@ const pool = mysql.createPool({
   database: process.env.DB_NAME,
 });
 
+app.get("/ping", (req, res) => {
+  console.log("🟢 /ping çalıştı");
+  res.send("pong");
+});
+
 // API: Son veri çekim tarihindeki en yüksek hacim artışı
 app.get("/top-gainers", (req, res) => {
   console.log("🟢 /top-gainers isteği alındı");
