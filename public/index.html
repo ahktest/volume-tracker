@@ -1,158 +1,59 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="tr">
 <head>
-  <meta charset="UTF-8">
-  <title>Hacim Tabloları</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Top 15 Hacim Artışı</title>
+  <link rel="stylesheet" href="css/style.css" />
 </head>
-<body class="bg-dark text-white p-4">
-  <h2 class="mb-4">📊 Hacim Artış/Düşüş ve Yeni Girişler</h2>
+<body>
 
-  <h3>🔼 En Çok Artan Hacimler</h3>
-  <table class="table table-dark table-bordered table-striped" id="increaseTable">
-    <thead>
-      <tr>
-        <th>Sembol</th>
-        <th>Fiyat</th>
-        <th>Son Hacim</th>
-        <th>4s Önce</th>
-        <th>8s Önce</th>
-        <th>Artış %</th>
-        <th>Link</th>
-        <th>Tarih</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
+  <div class="container">
+    <h1>Son 4 Saatte En Çok Hacim Artışı Yaşayan 15 Coin</h1>
 
-  <h3 class="mt-5">🔽 En Çok Düşen Hacimler</h3>
-  <table class="table table-dark table-bordered table-striped" id="decreaseTable">
-    <thead>
-      <tr>
-        <th>Sembol</th>
-        <th>Fiyat</th>
-        <th>Son Hacim</th>
-        <th>4s Önce</th>
-        <th>8s Önce</th>
-        <th>Düşüş %</th>
-        <th>Link</th>
-        <th>Tarih</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
+    <table id="volume-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Symbol</th>
+          <th>Slug</th>
+          <th>Fiyat</th>
+          <th>MarketCap</th>
+          <th>Son Zaman</th>
+          <th>4h Önce</th>
+          <th>Son Hacim</th>
+          <th>4h Hacim</th>
+          <th>8h Hacim</th>
+          <th>Fark</th>
+          <th>%</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
 
-  <h3 class="mt-5">🆕 Son 8 Saatte Top200’e Girenler</h3>
-  <table class="table table-dark table-bordered table-striped" id="newTop200Table">
-    <thead>
-      <tr>
-        <th>Sembol</th>
-        <th>Fiyat</th>
-        <th>Hacim (4s önce)</th>
-        <th>Hacim (şimdi)</th>
-        <th>Link</th>
-        <th>Tarih</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
+    <h1>Son 4 Saatte En Çok Hacim Düşüşü Yaşayan 15 Coin</h1>
+<table id="volume-decrease-table">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Symbol</th>
+      <th>Slug</th>
+      <th>Fiyat</th>
+      <th>MarketCap</th>
+      <th>Son Zaman</th>
+      <th>4h Önce</th>
+      <th>Son Hacim</th>
+      <th>4h Hacim</th>
+      <th>8h Hacim</th>
+      <th>Fark</th>
+      <th>%</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
 
-  <script>
-    fetch('/api/coins')
-      .then(res => res.json())
-      .then(data => {
-        const grouped = {};
-        data.forEach(d => {
-          if (!grouped[d.symbol]) grouped[d.symbol] = [];
-          grouped[d.symbol].push(d);
-        });
+  </div>
 
-        const topIncreases = [];
-        const topDecreases = [];
-        const newEntries = [];
-
-        Object.values(grouped).forEach(coinData => {
-          coinData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-          const [v0, v1, v2] = coinData;
-
-          // En az 3 veri varsa artış/düşüş hesapla
-          if (v0 && v1 && v2) {
-            const change = ((v0.volume - v1.volume) / v1.volume) * 100;
-            const common = {
-              symbol: v0.symbol,
-              price: v0.price,
-              volume_now: v0.volume,
-              volume_4h: v1.volume,
-              volume_8h: v2.volume,
-              percent: change,
-              slug: v0.slug,
-              timestamp: v0.timestamp
-            };
-
-            if (change > 0) topIncreases.push(common);
-            else topDecreases.push(common);
-          }
-
-          // Eğer sadece son 2 veri varsa, bu yeni girmiş olabilir
-          if (coinData.length === 2) {
-            const [latest, earlier] = coinData;
-            const hoursDiff = Math.abs((new Date(latest.timestamp) - new Date(earlier.timestamp)) / (1000 * 60 * 60));
-            if (hoursDiff >= 3 && hoursDiff <= 5) {
-              newEntries.push({
-                symbol: latest.symbol,
-                price: latest.price,
-                volume_now: latest.volume,
-                volume_4h: earlier.volume,
-                slug: latest.slug,
-                timestamp: latest.timestamp
-              });
-            }
-          }
-        });
-
-        // Artanlar
-        topIncreases.sort((a, b) => b.percent - a.percent);
-        const render = (data, selector) => {
-          const tbody = document.querySelector(selector + ' tbody');
-          tbody.innerHTML = '';
-          data.slice(0, 10).forEach(c => {
-            const row = `<tr>
-              <td>${c.symbol}</td>
-              <td>${Number(c.price).toFixed(4)}</td>
-              <td>${Number(c.volume_now).toLocaleString()}</td>
-              <td>${Number(c.volume_4h).toLocaleString()}</td>
-              <td>${Number(c.volume_8h).toLocaleString()}</td>
-              <td>${c.percent.toFixed(2)}%</td>
-              <td><a href="https://coinmarketcap.com/currencies/${c.slug}/" target="_blank">Link</a></td>
-              <td>${new Date(c.timestamp).toLocaleString()}</td>
-            </tr>`;
-            tbody.innerHTML += row;
-          });
-        };
-        render(topIncreases, '#increaseTable');
-
-        // Düşenler
-        topDecreases.sort((a, b) => a.percent - b.percent);
-        render(topDecreases, '#decreaseTable');
-
-        // Yeni girişler
-        const renderNewEntries = (data) => {
-          const tbody = document.querySelector('#newTop200Table tbody');
-          tbody.innerHTML = '';
-          data.forEach(c => {
-            const row = `<tr>
-              <td>${c.symbol}</td>
-              <td>${Number(c.price).toFixed(4)}</td>
-              <td>${Number(c.volume_4h).toLocaleString()}</td>
-              <td>${Number(c.volume_now).toLocaleString()}</td>
-              <td><a href="https://coinmarketcap.com/currencies/${c.slug}/" target="_blank">Link</a></td>
-              <td>${new Date(c.timestamp).toLocaleString()}</td>
-            </tr>`;
-            tbody.innerHTML += row;
-          });
-        };
-        renderNewEntries(newEntries);
-      });
-  </script>
+  <script src="js/app.js"></script>
 </body>
 </html>
