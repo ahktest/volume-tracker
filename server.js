@@ -43,13 +43,13 @@ app.get('/api/top-increase', async (req, res) => {
       (latest.volume - t4.volume) AS fark,
       ROUND(((latest.volume - t4.volume) / t4.volume) * 100, 2) AS yuzdelik
     FROM (
-      SELECT * FROM your_table ORDER BY id DESC LIMIT 200
+      SELECT * FROM volume_data ORDER BY id DESC LIMIT 200
     ) AS latest
     JOIN (
-      SELECT * FROM your_table ORDER BY id DESC LIMIT 200, 200
+      SELECT * FROM volume_data ORDER BY id DESC LIMIT 200, 200
     ) AS t4 ON latest.symbol = t4.symbol
     JOIN (
-      SELECT * FROM your_table ORDER BY id DESC LIMIT 400, 200
+      SELECT * FROM volume_data ORDER BY id DESC LIMIT 400, 200
     ) AS t8 ON latest.symbol = t8.symbol
     ORDER BY yuzdelik DESC
     LIMIT 15
