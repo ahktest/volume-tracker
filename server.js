@@ -23,43 +23,33 @@ app.get("/ping", (req, res) => {
   res.send("pong");
 });
 
-// API: Son veri çekim tarihindeki en yüksek hacim artışı
-app.get("/top-gainers", (req, res) => {
-//require("dotenv").config();
-console.log("ENV test ->", process.env.DB_USER, process.env.DB_PASSWORD);
-
-
-  pool.query(`
-    SELECT 
-      t1.symbol,
-      t1.price,
-      t1.volume AS last_volume,
-      t2.volume AS volume_4h_ago,
-      t3.volume AS volume_8h_ago,
-      ROUND(((t1.volume - t2.volume) / t2.volume) * 100, 2) AS volume_change_percent,
-      t1.slug,
-      t1.timestamp
-    FROM volume_data t1
-    LEFT JOIN volume_data t2 ON t1.symbol = t2.symbol AND t2.timestamp = (
-      SELECT MAX(timestamp) FROM volume_data WHERE timestamp < t1.timestamp
-    )
-    LEFT JOIN volume_data t3 ON t1.symbol = t3.symbol AND t3.timestamp = (
-      SELECT MAX(timestamp) FROM volume_data WHERE timestamp < (
-        SELECT MAX(timestamp) FROM volume_data WHERE timestamp < t1.timestamp
-      )
-    )
-    WHERE t1.timestamp = (SELECT MAX(timestamp) FROM volume_data)
-    ORDER BY volume_change_percent DESC
-    LIMIT 10
-  `, (err, results) => {
-    if (err) {
-      console.error("❌ SQL HATASI:", err.sqlMessage || err.message || err);
-      return res.status(500).json({ error: "Veri alınamadı", detay: err.sqlMessage || err.message || err });
-    }
-
-    console.log("✅ Sorgu Sonucu:", results);
-    res.json(results);
-  });
+app.get('/top-increase', async (req, res) => {
+  const [rows] = await pool.query(`
+    SELECT
+      latest.symbol,
+      latest.slug,
+      latest.price,
+      latest.marketcap,
+      latest.timestamp AS ltime,
+      t4.timestamp AS ptime,
+      latest.volume AS lvolume,
+      t4.volume AS v4hvolume,
+      t8.volume AS v8hvolume,
+      (latest.volume - t4.volume) AS fark,
+      ROUND(((latest.volume - t4.volume) / t4.volume) * 100, 2) AS yuzdelik
+    FROM (
+      SELECT * FROM your_table ORDER BY id DESC LIMIT 200
+    ) AS latest
+    JOIN (
+      SELECT * FROM your_table ORDER BY id DESC LIMIT 200, 200
+    ) AS t4 ON latest.symbol = t4.symbol
+    JOIN (
+      SELECT * FROM your_table ORDER BY id DESC LIMIT 400, 200
+    ) AS t8 ON latest.symbol = t8.symbol
+    ORDER BY yuzdelik DESC
+    LIMIT 15
+  `);
+  res.json(rows);
 });
 
 
