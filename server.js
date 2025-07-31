@@ -28,7 +28,7 @@ app.get("/ping", (req, res) => {
   res.send("pong");
 });
 
-app.get('/top-increase', async (req, res) => {
+app.get('/api/top-increase', async (req, res) => {
   const [rows] = await pool.query(`
     SELECT
       latest.symbol,
