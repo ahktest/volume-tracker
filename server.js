@@ -1,7 +1,8 @@
+require("dotenv").config();
 const express = require("express");
 const mysql = require("mysql2");
 const cors = require("cors");
-require("dotenv").config();
+console.log('nedir aga durum');
 //require("dotenv").config();
 console.log("ENV test ->", process.env.DB_USER, process.env.DB_PASSWORD);
 
