@@ -46,6 +46,8 @@ app.get("/top-gainers", (req, res) => {
       console.error("Veri çekme hatası:", err);
       return res.status(500).json({ error: "Veri alınamadı" });
     }
+
+    console.log("Sorgu Sonucu:", results); // ← Burada log var
     res.json(results);
   });
 });
