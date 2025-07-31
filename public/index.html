@@ -1,58 +1,68 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Top 15 Hacim Artışı</title>
-  <link rel="stylesheet" href="css/style.css" />
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Volume Tracker</title>
+<link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
+  <header>
+    <div class="logo">🚀</div>
+    <div class="title">Volume Tracker</div>
+  </header>
 
-  <div class="container">
-    <h1>Son 4 Saatte En Çok Hacim Artışı Yaşayan 15 Coin</h1>
+  <main>
+    <section>
+      <h2>Top 15 En Çok Artan Hacimler</h2>
+      <div class="table-wrapper">
+        <table id="volume-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Symbol</th>
+              <th>Fiyat</th>
+              <th>MarketCap</th>
+              <th>Son Zaman</th>
+              <th>4h Önce</th>
+              <th>Son Hacim</th>
+              <th>4h Hacim</th>
+              <th>8h Hacim</th>
+              <th>Fark</th>
+              <th>%</th>
+              <th>CMC Link</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
 
-    <table id="volume-table">
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Symbol</th>
-          <th>Slug</th>
-          <th>Fiyat</th>
-          <th>MarketCap</th>
-          <th>Son Zaman</th>
-          <th>4h Önce</th>
-          <th>Son Hacim</th>
-          <th>4h Hacim</th>
-          <th>8h Hacim</th>
-          <th>Fark</th>
-          <th>%</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-
-    <h1>Son 4 Saatte En Çok Hacim Düşüşü Yaşayan 15 Coin</h1>
-<table id="volume-decrease-table">
-  <thead>
-    <tr>
-      <th>#</th>
-      <th>Symbol</th>
-      <th>Slug</th>
-      <th>Fiyat</th>
-      <th>MarketCap</th>
-      <th>Son Zaman</th>
-      <th>4h Önce</th>
-      <th>Son Hacim</th>
-      <th>4h Hacim</th>
-      <th>8h Hacim</th>
-      <th>Fark</th>
-      <th>%</th>
-    </tr>
-  </thead>
-  <tbody></tbody>
-</table>
-
-  </div>
+    <section>
+      <h2>Top 15 En Çok Azalan Hacimler</h2>
+      <div class="table-wrapper">
+        <table id="volume-decrease-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Symbol</th>
+              <th>Fiyat</th>
+              <th>MarketCap</th>
+              <th>Son Zaman</th>
+              <th>4h Önce</th>
+              <th>Son Hacim</th>
+              <th>4h Hacim</th>
+              <th>8h Hacim</th>
+              <th>Fark</th>
+              <th>%</th>
+              <th>CMC Link</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
 
   <script src="js/app.js"></script>
 </body>
