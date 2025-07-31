@@ -19,12 +19,7 @@ const pool = mysql.createPool({
 
 // API: Son veri çekim tarihindeki en yüksek hacim artışı
 app.get("/top-gainers", (req, res) => {
-      console.log("🟢 /top-gainers isteği alındı"); // ← Bu satırı en üste ekle
-
-    pool.query(`SELECT MAX(timestamp) as max_time FROM volume_data`, (err, result) => {
-    if (err) return console.error("Max timestamp hatası:", err);
-    console.log("⏱️ En son timestamp:", result[0].max_time);
-  });
+  console.log("🟢 /top-gainers isteği alındı");
 
   pool.query(`
     SELECT 
@@ -50,14 +45,15 @@ app.get("/top-gainers", (req, res) => {
     LIMIT 10
   `, (err, results) => {
     if (err) {
-      console.error("Veri çekme hatası:", err);
-      return res.status(500).json({ error: "Veri alınamadı" });
+      console.error("❌ SQL HATASI:", err.sqlMessage || err.message || err);
+      return res.status(500).json({ error: "Veri alınamadı", detay: err.sqlMessage || err.message || err });
     }
 
-    console.log("Sorgu Sonucu:", results); // ← Burada log var
+    console.log("✅ Sorgu Sonucu:", results);
     res.json(results);
   });
 });
+
 
 // Sunucu başlatma
 app.listen(PORT, () => {
