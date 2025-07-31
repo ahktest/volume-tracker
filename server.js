@@ -91,6 +91,29 @@ app.get('/api/top-decrease', async (req, res) => {
   }
 });
 
+app.get('/coin/:slug/history', async (req, res) => {
+  const slug = req.params.slug;
+
+  try {
+    const [rows] = await db.execute(
+      `SELECT timestamp, price, volume
+       FROM volume_data
+       WHERE slug = ?
+         AND timestamp >= NOW() - INTERVAL 3 DAY
+       ORDER BY timestamp ASC`,
+      [slug]
+    );
+
+    res.json({
+      slug,
+      data: rows,
+    });
+
+  } catch (error) {
+    console.error('Veri çekme hatası:', error);
+    res.status(500).json({ error: 'Veri alınamadı' });
+  }
+});
 
 
 // Sunucu başlatma
