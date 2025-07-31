@@ -148,3 +148,41 @@ tbody td {
     min-width: 700px;
   }
 }
+
+/* Table genişliğini max genişlik olarak sınırla ve kenar boşluğu ver */
+main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 15px; /* Kenar boşlukları */
+}
+
+/* Tablo sığması için responsive ve yatay kaydırma */
+.table-wrapper {
+  overflow-x: auto;
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(255 255 255 / 0.1);
+  padding-bottom: 10px;
+}
+
+/* Tablo genişliğini %100 yap, ancak min-width'i düşür */
+table {
+  min-width: 700px; /* Daha önce 900 idi, küçülttük */
+  width: 100%;
+}
+
+/* Mobilde tablo scroll */
+@media (max-width: 768px) {
+  table {
+    min-width: 600px;
+  }
+}
+
+/* Kenar boşluklarını ayarlamak için tbody td padding küçültülebilir */
+tbody td {
+  padding: 8px 10px;
+}
+
+/* Header ve body için yatay padding */
+thead th {
+  padding: 10px 12px;
+}
