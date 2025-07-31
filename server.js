@@ -1,6 +1,8 @@
 require('dotenv').config({ path: __dirname + '/.env' });
 const express = require("express");
-const mysql = require("mysql2");
+//const mysql = require("mysql2");
+const mysql = require('mysql2/promise');
+
 const cors = require("cors");
 
 //app.use(express.static('public'));
