@@ -1,0 +1,24 @@
+<svg width="80" height="60" viewBox="0 0 80 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background (transparent) -->
+  <rect width="80" height="60" fill="transparent"/>
+
+  <!-- First Green Candle -->
+  <line x1="15" y1="5" x2="15" y2="15" stroke="#4CAF50" stroke-width="2"/>
+  <rect x="11" y="15" width="8" height="20" rx="1" fill="#4CAF50"/>
+  <line x1="15" y1="35" x2="15" y2="45" stroke="#4CAF50" stroke-width="2"/>
+
+  <!-- Second Red Candle -->
+  <line x1="30" y1="10" x2="30" y2="15" stroke="#EF5350" stroke-width="2"/>
+  <rect x="26" y="15" width="8" height="15" rx="1" fill="#EF5350"/>
+  <line x1="30" y1="30" x2="30" y2="40" stroke="#EF5350" stroke-width="2"/>
+
+  <!-- Third Green Candle -->
+  <line x1="45" y1="8" x2="45" y2="18" stroke="#4CAF50" stroke-width="2"/>
+  <rect x="41" y="18" width="8" height="18" rx="1" fill="#4CAF50"/>
+  <line x1="45" y1="36" x2="45" y2="42" stroke="#4CAF50" stroke-width="2"/>
+
+  <!-- Fourth Red Candle -->
+  <line x1="60" y1="12" x2="60" y2="17" stroke="#EF5350" stroke-width="2"/>
+  <rect x="56" y="17" width="8" height="14" rx="1" fill="#EF5350"/>
+  <line x1="60" y1="31" x2="60" y2="38" stroke="#EF5350" stroke-width="2"/>
+</svg>
