@@ -35,8 +35,8 @@ async function fetchIncreaseData() {
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td data-label="#">${idx + 1}</td>
-        <td data-label="Symbol">${coin.symbol}
-            <a href="/coin.html?slug=${coin.slug}" ></a>
+        <td data-label="Symbol">
+            <a href="/coin.html?slug=${coin.slug}" >${coin.symbol}</a>
         </td>
         <td data-label="Fiyat">${formatPrice(coin.price)}</td>
         <td data-label="MarketCap">${formatNumberTooltip(coin.marketcap)}</td>
@@ -72,8 +72,8 @@ async function fetchDecreaseData() {
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td data-label="#">${idx + 1}</td>
-        <td data-label="Symbol">${coin.symbol}
-            <a href="/coin.html?slug=${coin.slug}" ></a>
+        <td data-label="Symbol">
+            <a href="/coin.html?slug=${coin.slug}" >${coin.symbol}</a>
         </td>
         <td data-label="Fiyat">${formatPrice(coin.price)}</td>
         <td data-label="MarketCap">${formatNumberTooltip(coin.marketcap)}</td>

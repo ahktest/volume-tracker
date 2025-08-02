@@ -97,7 +97,7 @@ app.get('/coin/:slug/history', async (req, res) => {
 
   try {
     const [rows] = await pool.execute(
-      `SELECT timestamp, price, volume
+      `SELECT timestamp, price, volume, marketcap
        FROM volume_data
        WHERE slug = ?
          AND timestamp >= NOW() - INTERVAL 3 DAY
