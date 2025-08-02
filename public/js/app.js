@@ -35,7 +35,9 @@ async function fetchIncreaseData() {
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td data-label="#">${idx + 1}</td>
-        <td data-label="Symbol">${coin.symbol}</td>
+        <td data-label="Symbol">${coin.symbol}
+            <a href="/coin.html?slug=${coin.slug}" ></a>
+        </td>
         <td data-label="Fiyat">${formatPrice(coin.price)}</td>
         <td data-label="MarketCap">${formatNumberTooltip(coin.marketcap)}</td>
         <td data-label="Son Zaman">${new Date(coin.ltime).toLocaleString()}</td>
@@ -70,7 +72,9 @@ async function fetchDecreaseData() {
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td data-label="#">${idx + 1}</td>
-        <td data-label="Symbol">${coin.symbol}</td>
+        <td data-label="Symbol">${coin.symbol}
+            <a href="/coin.html?slug=${coin.slug}" ></a>
+        </td>
         <td data-label="Fiyat">${formatPrice(coin.price)}</td>
         <td data-label="MarketCap">${formatNumberTooltip(coin.marketcap)}</td>
         <td data-label="Son Zaman">${new Date(coin.ltime).toLocaleString()}</td>

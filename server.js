@@ -93,7 +93,7 @@ app.get('/api/top-decrease', async (req, res) => {
 
 app.get('/coin/:slug/history', async (req, res) => {
   const slug = req.params.slug;
-  console.log('verileri çekme isteği ==>:', slug);
+  //console.log('verileri çekme isteği ==>:', slug);
 
   try {
     const [rows] = await pool.execute(
