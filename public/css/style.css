@@ -215,3 +215,20 @@ thead th {
 .tooltip:hover::after {
   opacity: 1;
 }
+
+body {
+  background-color: #121212;
+  color: #f1f1f1;
+}
+.sidebar {
+  background: #1e1e1e;
+  color: #fff;
+}
+a {
+  color: #4fc3f7;
+}
+
+.coin-detail span {
+  font-size: 15px;
+  color: #ccc;
+}

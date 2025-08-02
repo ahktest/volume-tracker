@@ -38,35 +38,47 @@ function buildChart(data) {
       ],
     },
     options: {
-      responsive: true,
-      interaction: {
-        mode: "index",
-        intersect: false,
-      },
-      plugins: {
-        tooltip: {
-          callbacks: {
-            afterBody: (ctx) => {
-              const price = prices[ctx[0].dataIndex];
-              return `Fiyat: $${formatNumber(price)}`;
-            }
-          }
-        }
-      },
-      scales: {
-        y: {
-          beginAtZero: true,
-          position: "left",
-          title: { display: true, text: "Hacim" }
-        },
-        y1: {
-          beginAtZero: false,
-          position: "right",
-          grid: { drawOnChartArea: false },
-          title: { display: true, text: "Fiyat (USD)" }
-        }
+  responsive: true,
+  layout: {
+    padding: 10
+  },
+  interaction: {
+    mode: "index",
+    intersect: false
+  },
+  plugins: {
+    legend: {
+      labels: {
+        color: "#fff"
       }
+    },
+    tooltip: {
+      backgroundColor: "#333",
+      titleColor: "#fff",
+      bodyColor: "#fff"
     }
+  },
+  scales: {
+    x: {
+      ticks: { color: "#aaa" },
+      grid: { color: "#222" }
+    },
+    y: {
+      beginAtZero: true,
+      position: "left",
+      title: { display: true, text: "Hacim", color: "#ccc" },
+      ticks: { color: "#aaa" },
+      grid: { color: "#222" }
+    },
+    y1: {
+      beginAtZero: false,
+      position: "right",
+      grid: { drawOnChartArea: false },
+      title: { display: true, text: "Fiyat (USD)", color: "#ccc" },
+      ticks: { color: "#aaa" }
+    }
+  }
+}
   });
 }
 
