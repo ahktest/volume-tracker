@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Coin Detay</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; display: flex; height: 100vh; }
+    .sidebar { width: 20%; padding: 20px; background: #f3f3f3; box-shadow: 1px 0 5px rgba(0,0,0,0.1); }
+    .content { flex-grow: 1; padding: 20px; }
+    .coin-detail { margin-bottom: 20px; }
+    .coin-detail span { display: block; margin-bottom: 8px; font-size: 14px; }
+    canvas { max-height: 400px; }
+  </style>
+</head>
+<body>
+  <div class="sidebar">
+    <h2 id="coin-name">Yükleniyor...</h2>
+    <div class="coin-detail">
+      <span id="coin-price"></span>
+      <span id="coin-marketcap"></span>
+      <span id="coin-volume"></span>
+      <a id="cmc-link" href="#" target="_blank">CMC'de Gör</a>
+    </div>
+  </div>
+
+  <div class="content">
+    <canvas id="volumeChart"></canvas>
+  </div>
+
+  <script src="/js/coin.js"></script>
+</body>
+</html>
