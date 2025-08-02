@@ -16,6 +16,7 @@
   </style>
 </head>
 <body>
+  <!-- Header -->
   <header>
     <a href="/" class="logo" aria-label="Candlestick logo" role="img">
       <img src="logo.svg" alt="Logo" height="40" />
@@ -23,19 +24,21 @@
     <div class="title">Volume Tracker</div>
   </header>
 
+  <!-- Sayfa ikiye bölünmüş yapı -->
   <div style="display: flex; height: calc(100vh - 60px);">
-  <div class="sidebar">
-    <h2 id="coin-name">Yükleniyor...</h2>
-    <div class="coin-detail">
-      <span id="coin-price"></span>
-      <span id="coin-marketcap"></span>
-      <span id="coin-volume"></span>
-      <a id="cmc-link" href="#" target="_blank">CMC'de Gör</a>
+    <div class="sidebar">
+      <h2 id="coin-name">Yükleniyor...</h2>
+      <div class="coin-detail">
+        <span id="coin-price"></span>
+        <span id="coin-marketcap"></span>
+        <span id="coin-volume"></span>
+        <a id="cmc-link" href="#" target="_blank">CMC'de Gör</a>
+      </div>
     </div>
-  </div>
 
-  <div class="content">
-    <canvas id="volumeChart"></canvas>
+    <div class="content">
+      <canvas id="volumeChart"></canvas>
+    </div>
   </div>
 
   <script src="/js/coin.js"></script>
