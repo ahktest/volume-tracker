@@ -96,7 +96,7 @@ app.get('/coin/:slug/history', async (req, res) => {
   console.log('verileri çekme isteği:', slug);
 
   try {
-    const [rows] = await db.execute(
+    const [rows] = await pool.execute(
       `SELECT timestamp, price, volume
        FROM volume_data
        WHERE slug = ?
