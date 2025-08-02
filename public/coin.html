@@ -4,33 +4,90 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Coin Detay</title>
-  <link rel="stylesheet" href="/css/style.css" />
+  <link rel="icon" href="/favicon.png" type="image/x-icon" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; display: flex; height: 100vh; }
-    .sidebar { width: 20%; padding: 20px; background: #353131; box-shadow: 1px 0 5px rgba(0,0,0,0.1); }
-    .content { flex-grow: 1; padding: 20px; }
-    .coin-detail { margin-bottom: 20px; }
-    .coin-detail span { display: block; margin-bottom: 8px; font-size: 14px; }
-    canvas { max-height: 400px; }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      background-color: #121212;
+      color: #f1f1f1;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 20px;
+      background-color: #1e1e1e;
+      color: white;
+      height: 60px;
+    }
+
+    .logo img {
+      height: 40px;
+    }
+
+    .title {
+      font-size: 20px;
+      font-weight: bold;
+    }
+
+    .container {
+      display: flex;
+      height: calc(100vh - 60px);
+    }
+
+    .sidebar {
+      width: 20%;
+      padding: 20px;
+      background: #2c2c2c;
+      color: #fff;
+      border-right: 1px solid #444;
+    }
+
+    .coin-detail {
+      margin-top: 20px;
+    }
+
+    .coin-detail span {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+      color: #ccc;
+    }
+
+    .coin-detail a {
+      color: #4fc3f7;
+      text-decoration: none;
+    }
+
+    .coin-detail a:hover {
+      text-decoration: underline;
+    }
+
+    .content {
+      flex-grow: 1;
+      padding: 20px;
+    }
+
+    canvas {
+      max-height: 400px;
+    }
   </style>
 </head>
 <body>
+
+  <!-- Üst Menü -->
   <header>
-    <!-- public/index.html içindeki header kısmında logo div'i -->
-<div class="logo" aria-label="Candlestick logo" role="img">
-  <a href="/" class="logo" aria-label="Candlestick logo" role="img">
-      <img src="logo.svg" alt="Logo" height="40" />
+    <a href="/" class="logo" aria-label="Candlestick logo" role="img">
+      <img src="/logo.svg" alt="Logo" />
     </a>
-
-</div>
-
-
     <div class="title">Volume Tracker</div>
   </header>
 
-  <!-- Sayfa ikiye bölünmüş yapı -->
-  <div style="display: flex; height: calc(100vh - 60px);">
+  <!-- İçerik -->
+  <div class="container">
     <div class="sidebar">
       <h2 id="coin-name">Yükleniyor...</h2>
       <div class="coin-detail">
