@@ -1,91 +1,102 @@
 <!doctype html>
 <html lang="tr">
 <head>
-  <meta charset="utf-8">
+  <meta charset="utf-8" />
   <title>Simulation – Liste</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <script src="https://cdn.tailwindcss.com"></script>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;padding:24px;max-width:1100px;margin:auto}
+    a{color:inherit}
+    table{width:100%;border-collapse:collapse;margin-top:12px}
+    th,td{padding:10px;border-bottom:1px solid #eee}
+    th{cursor:pointer;text-align:left;white-space:nowrap}
+    .muted{color:#6b7280}
+    .toolbar{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
+    input,select{padding:6px 8px;border:1px solid #e5e7eb;border-radius:8px}
+  </style>
 </head>
-<body class="bg-slate-950 text-slate-100">
-  <div class="max-w-7xl mx-auto p-6">
-    <div class="flex items-center justify-between mb-4">
-      <h1 id="title" class="text-2xl font-semibold">Liste</h1>
-      <a href="/simulation" class="text-sm text-sky-400 underline">← Özet</a>
-    </div>
-
-    <div class="overflow-x-auto rounded-2xl ring-1 ring-slate-800">
-      <table class="min-w-full text-sm">
-        <thead class="bg-slate-900/60">
-          <tr>
-            <th class="px-3 py-2 cursor-pointer sort" data-k="timestamp">Zaman</th>
-            <th class="px-3 py-2 cursor-pointer sort" data-k="coin">Coin</th>
-            <th class="px-3 py-2 cursor-pointer sort" data-k="price">Entry</th>
-            <th class="px-3 py-2 cursor-pointer sort" data-k="nprice">Exit</th>
-            <th class="px-3 py-2">Position</th>
-            <th class="px-3 py-2 cursor-pointer sort" data-k="pnl">%PnL</th>
-          </tr>
-        </thead>
-        <tbody id="rows" class="divide-y divide-slate-800 bg-slate-900/30"></tbody>
-      </table>
-    </div>
+<body>
+  <a href="/simulation/">← Geri</a>
+  <h1 id="title">Liste</h1>
+  <div class="toolbar">
+    <label>Sırala:
+      <select id="order">
+        <option value="desc" selected>Yeni → Eski</option>
+        <option value="asc">Eski → Yeni</option>
+      </select>
+    </label>
+    <label>Limit:
+      <input id="limit" type="number" min="1" max="1000" value="200" />
+    </label>
+    <button id="reload">Yenile</button>
   </div>
 
+  <table id="tbl">
+    <thead>
+      <tr>
+        <th data-k="timestamp">Zaman</th>
+        <th data-k="coin">Coin</th>
+        <th data-k="price">Giriş</th>
+        <th data-k="nprice">Çıkış</th>
+        <th data-k="pnl">PnL %</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
   <script>
-  const params = new URLSearchParams(location.search);
-  let type = params.get('type') || 'long';
-  let sort = 'timestamp';
-  let dir = 'desc';
+    const qs = new URLSearchParams(location.search);
+    const position = qs.get('position') || 'long';
+    document.getElementById('title').textContent = position + ' – Kayıtlar';
 
-  document.getElementById('title').textContent = `Koşul: ${type}`;
+    const orderSel = document.getElementById('order');
+    const limitInp = document.getElementById('limit');
+    const reloadBtn = document.getElementById('reload');
 
-  function fmtNum(v, d=2) {
-    if (v == null) return '-';
-    const n = Number(v);
-    return isFinite(n) ? n.toFixed(d) : '-';
+    let rows = [];
+    let ascToggle = true;
+
+    async function load(){
+      const url = `/api/sim/list?position=${encodeURIComponent(position)}&order=${orderSel.value}&limit=${limitInp.value}`;
+      const res = await fetch(url);
+      rows = await res.json();
+      render(rows);
     }
 
-  async function load() {
-    const url = `/simulation/api/list?type=${encodeURIComponent(type)}&sort=${sort}&dir=${dir}&limit=300`;
-    const res = await fetch(url);
-    const { ok, data } = await res.json();
-    if (!ok) throw new Error('list failed');
+    function render(data){
+      const tb = document.querySelector('#tbl tbody');
+      tb.innerHTML = data.map(r=>`
+        <tr>
+          <td>${new Date(r.timestamp).toLocaleString()}</td>
+          <td>${r.coin}</td>
+          <td>${Number(r.price).toFixed(6)}</td>
+          <td>${r.nprice!=null?Number(r.nprice).toFixed(6):'-'}</td>
+          <td>${r.pnl!=null?Number(r.pnl).toFixed(2):'-'}</td>
+        </tr>
+      `).join('');
+    }
 
-    const tbody = document.getElementById('rows');
-    tbody.innerHTML = '';
-    data.forEach(r => {
-      const tr = document.createElement('tr');
-      const ts = new Date(r.timestamp).toLocaleString();
-      const pnlColor = r.pnl > 0 ? 'text-green-400' : (r.pnl < 0 ? 'text-red-400' : 'text-slate-300');
-      tr.innerHTML = `
-        <td class="px-3 py-2 whitespace-nowrap">${ts}</td>
-        <td class="px-3 py-2">${r.coin}</td>
-        <td class="px-3 py-2">${fmtNum(r.price, 6)}</td>
-        <td class="px-3 py-2">${fmtNum(r.nprice, 6)}</td>
-        <td class="px-3 py-2">${r.position}</td>
-        <td class="px-3 py-2 ${pnlColor} font-medium">${fmtNum(r.pnl, 2)}%</td>
-      `;
-      tbody.appendChild(tr);
+    function sortBy(k){
+      ascToggle = !ascToggle;
+      const dir = ascToggle ? 1 : -1;
+      const sorted = [...rows].sort((a,b)=>{
+        const A=a[k], B=b[k];
+        if (A==null && B==null) return 0;
+        if (A==null) return 1;
+        if (B==null) return -1;
+        if (k==='timestamp') return (new Date(A)-new Date(B))*dir;
+        if (typeof A==='number' && typeof B==='number') return (A-B)*dir;
+        return (''+A).localeCompare(''+B)*dir;
+      });
+      render(sorted);
+    }
+
+    document.querySelectorAll('th[data-k]').forEach(th=>{
+      th.addEventListener('click', ()=>sortBy(th.dataset.k));
     });
-  }
+    reloadBtn.addEventListener('click', load);
 
-  document.querySelectorAll('.sort').forEach(th => {
-    th.addEventListener('click', () => {
-      const k = th.dataset.k;
-      if (sort === k) {
-        dir = (dir === 'asc') ? 'desc' : 'asc';
-      } else {
-        sort = k;
-        dir = 'desc';
-      }
-      load();
-    });
-  });
-
-  load().catch(err => {
-    document.getElementById('rows').innerHTML =
-      `<tr><td class="px-3 py-3 text-red-400">Liste yüklenemedi.</td></tr>`;
-    console.error(err);
-  });
+    load();
   </script>
 </body>
 </html>

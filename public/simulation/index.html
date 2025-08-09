@@ -1,70 +1,45 @@
 <!doctype html>
 <html lang="tr">
 <head>
-  <meta charset="utf-8">
+  <meta charset="utf-8" />
   <title>Simulation – Özet</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <script src="https://cdn.tailwindcss.com"></script>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;padding:24px;max-width:1000px;margin:auto}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+    .card{border:1px solid #e5e7eb;border-radius:14px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.05);cursor:pointer}
+    .title{font-size:18px;font-weight:700;margin:0 0 8px}
+    .muted{color:#6b7280}
+  </style>
 </head>
-<body class="bg-slate-950 text-slate-100">
-  <div class="max-w-6xl mx-auto p-6">
-    <h1 class="text-2xl font-semibold mb-4">Simülasyon Koşulları – Performans Özeti</h1>
-    <p class="text-slate-400 mb-6">Koşula tıklayarak detay tablosuna gidebilirsiniz.</p>
+<body>
+  <h1>📊 Simulation – Performans Özeti</h1>
+  <p class="muted">Koşula tıklayın, detay listeyi görün.</p>
 
-    <div id="cards" class="grid md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
-  </div>
+  <div id="cards" class="grid"></div>
 
   <script>
-  const LABELS = {
-    'long': 'long',
-    'potansiyel-long': 'potansiyel long',
-    'short': 'short',
-    'potansiyel-short': 'potansiyel short',
-    'short-azalan': 'short (azalan hacim)',
-    'potansiyel-short-azalan': 'potansiyel short (azalan hacim)',
-    'potansiyel-long-azalan': 'potansiyel long (azalan hacim)',
-  };
-
-  function guessTypeKey(position) {
-    // backend’de zaten slug’a çevirdik ama yine de kısayol:
-    return Object.keys(LABELS).find(k => position.toLowerCase().includes(LABELS[k].split(' ')[0]));
-  }
-
-  fetch('/simulation/api/summary')
-    .then(r => r.json())
-    .then(({ok, data}) => {
-      if (!ok) throw new Error('summary failed');
+    async function load(){
+      const res = await fetch('/api/sim/summary');
+      const data = await res.json();
       const wrap = document.getElementById('cards');
-      data.forEach(item => {
-        // key backend’den geliyor; fallback:
-        const typeKey = item.key || guessTypeKey(item.position) || 'long';
-        const href = `/simulation/list.html?type=${encodeURIComponent(typeKey)}`;
-
-        const card = document.createElement('a');
-        card.href = href;
-        card.className =
-          'block rounded-2xl bg-slate-900/60 ring-1 ring-slate-800 p-5 hover:bg-slate-900 hover:ring-blue-500 transition';
-
+      wrap.innerHTML = '';
+      data.forEach(row=>{
+        const card = document.createElement('div');
+        card.className = 'card';
         card.innerHTML = `
-          <div class="flex items-center justify-between">
-            <div>
-              <div class="text-sm text-slate-400">${item.position}</div>
-              <div class="text-xl font-semibold mt-1">${item.win_rate.toFixed(2)}% <span class="text-sm font-normal text-slate-400">win-rate</span></div>
-            </div>
-            <div class="text-right">
-              <div class="text-green-400 font-medium">Avg PnL: ${item.avg_pnl.toFixed(2)}%</div>
-              <div class="text-slate-400 text-sm">Adet: ${item.adet}</div>
-            </div>
-          </div>
+          <div class="title">${row.position}</div>
+          <div>Adet: <b>${row.count}</b></div>
+          <div>Ortalama PnL: <b>${row.avg_pnl ?? '-' }%</b></div>
         `;
+        card.addEventListener('click', ()=>{
+          const q = encodeURIComponent(row.position);
+          window.location.href = `/simulation/list.html?position=${q}`;
+        });
         wrap.appendChild(card);
       });
-    })
-    .catch(err => {
-      document.getElementById('cards').innerHTML =
-        `<div class="text-red-400">Özet yüklenemedi.</div>`;
-      console.error(err);
-    });
+    }
+    load();
   </script>
 </body>
 </html>
