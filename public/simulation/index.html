@@ -1,45 +1,67 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="tr">
 <head>
-  <meta charset="utf-8" />
-  <title>Simulation – Özet</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="UTF-8">
+  <title>Simulation Koşullar</title>
+  <link rel="stylesheet" href="/style.css">
   <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;padding:24px;max-width:1000px;margin:auto}
-    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
-    .card{border:1px solid #e5e7eb;border-radius:14px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.05);cursor:pointer}
-    .title{font-size:18px;font-weight:700;margin:0 0 8px}
-    .muted{color:#6b7280}
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill,minmax(260px,1fr));
+      gap: 14px;
+      margin-top: 16px;
+    }
+    .card {
+      background-color: #1f1f1f;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 14px;
+      color: #ddd;
+      text-decoration: none;
+      transition: background-color 0.2s;
+    }
+    .card:hover {
+      background-color: #2a2a2a;
+    }
+    .title {
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .pos-long {
+      color: #4ade80;
+    }
+    .pos-short {
+      color: #f87171;
+    }
   </style>
 </head>
 <body>
-  <h1>📊 Simulation – Performans Özeti</h1>
-  <p class="muted">Koşula tıklayın, detay listeyi görün.</p>
-
-  <div id="cards" class="grid"></div>
+  <div class="container">
+    <h1>Simulation Koşullar</h1>
+    <div id="grid" class="grid"></div>
+  </div>
 
   <script>
-    async function load(){
+    async function loadSummary() {
       const res = await fetch('/api/sim/summary');
       const data = await res.json();
-      const wrap = document.getElementById('cards');
-      wrap.innerHTML = '';
-      data.forEach(row=>{
-        const card = document.createElement('div');
-        card.className = 'card';
-        card.innerHTML = `
-          <div class="title">${row.position}</div>
-          <div>Adet: <b>${row.count}</b></div>
-          <div>Ortalama PnL: <b>${row.avg_pnl ?? '-' }%</b></div>
+      const grid = document.getElementById('grid');
+      grid.innerHTML = '';
+
+      data.forEach(item => {
+        const a = document.createElement('a');
+        a.href = `/simulation/list.html?position=${encodeURIComponent(item.position)}`;
+        a.className = 'card';
+        a.innerHTML = `
+          <div class="title">${item.position}</div>
+          <div>Toplam: ${item.count}</div>
+          <div>Ortalama PnL: ${item.avg_pnl ? item.avg_pnl.toFixed(2) + '%' : '-'}</div>
         `;
-        card.addEventListener('click', ()=>{
-          const q = encodeURIComponent(row.position);
-          window.location.href = `/simulation/list.html?position=${q}`;
-        });
-        wrap.appendChild(card);
+        grid.appendChild(a);
       });
     }
-    load();
+
+    loadSummary();
   </script>
 </body>
 </html>
