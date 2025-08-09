@@ -1,74 +1,88 @@
-// server.js
+// public/simulation/server.js  (CommonJS)
 const express = require('express');
-const mysql = require('mysql2/promise');
 const cors = require('cors');
+const path = require('path');
+const mysql = require('mysql2/promise');
+const dotenv = require('dotenv');
+
+// .env kökte: /var/www/volume-tracker/.env
+dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 const app = express();
 app.use(cors());
+app.use(express.json());
 
 const db = mysql.createPool({
-  host: '127.0.0.1',
-  user: 'ahktest',
-  password: '123',
-  database: 'volume_tracker',
+  host: process.env.DB_HOST || '127.0.0.1',
+  user: process.env.DB_USER,
+  password: process.env.DB_PASS,
+  database: process.env.DB_NAME || 'volume_tracker',
   waitForConnections: true,
   connectionLimit: 5,
 });
 
-// Özet: her pozisyon için adet ve ort. PnL
-app.get('/api/sim/summary', async (_req, res) => {
+// Sağlık kontrolü
+app.get('/health', (req, res) => res.send('ok'));
+
+// Özet: koşul bazlı PnL performansı
+app.get('/api/sim/summary', async (req, res) => {
   try {
     const [rows] = await db.query(`
       SELECT position,
-             COUNT(*) AS count,
-             ROUND(AVG(pnl), 2) AS avg_pnl
+             COUNT(*) as trades,
+             AVG(pnl)   as avg_pnl,
+             SUM(pnl)   as total_pnl
       FROM simulasyon
-      WHERE position IS NOT NULL
+      WHERE pnl IS NOT NULL
       GROUP BY position
-      ORDER BY position
+      ORDER BY total_pnl DESC
     `);
     res.json(rows);
   } catch (e) {
-    console.error('summary err:', e);
-    res.status(500).json({ error: 'db' });
+    console.error('summary error:', e);
+    res.status(500).json({ error: 'summary_failed' });
   }
 });
 
-// Pozisyon listesi (UI'da dropdown istersek)
-app.get('/api/sim/positions', async (_req, res) => {
-  try {
-    const [rows] = await db.query(`
-      SELECT DISTINCT position
-      FROM simulasyon
-      WHERE position IS NOT NULL
-      ORDER BY position
-    `);
-    res.json(rows.map(r => r.position));
-  } catch (e) {
-    console.error('positions err:', e);
-    res.status(500).json({ error: 'db' });
-  }
-});
-
-// Detay liste: ?position=long&limit=200&order=desc
+// Liste: ?position=long&sort=pnl_desc&limit=50&offset=0
 app.get('/api/sim/list', async (req, res) => {
-  const position = req.query.position || 'long';
-  const limit = Math.min(parseInt(req.query.limit || '200', 10), 1000);
-  const order = (req.query.order || 'desc').toLowerCase() === 'asc' ? 'ASC' : 'DESC';
   try {
-    const [rows] = await db.query(`
-      SELECT id, timestamp, coin, price, nprice, pnl, position
-      FROM simulasyon
-      WHERE position = ?
-      ORDER BY timestamp ${order}
-      LIMIT ?
-    `, [position, limit]);
+    const { position, sort = 'timestamp_desc', limit = 50, offset = 0 } = req.query;
+
+    const allowedSort = {
+      'timestamp_desc': 'timestamp DESC',
+      'timestamp_asc' : 'timestamp ASC',
+      'pnl_desc'      : 'pnl DESC',
+      'pnl_asc'       : 'pnl ASC',
+      'price_desc'    : 'price DESC',
+      'price_asc'     : 'price ASC',
+    };
+    const orderBy = allowedSort[sort] || allowedSort.timestamp_desc;
+
+    const params = [];
+    let where = '1=1';
+    if (position) {
+      where += ' AND position = ?';
+      params.push(position);
+    }
+
+    const [rows] = await db.query(
+      `SELECT id, timestamp, coin, price, position, nprice, pnl
+       FROM simulasyon
+       WHERE ${where}
+       ORDER BY ${orderBy}
+       LIMIT ? OFFSET ?`,
+      [...params, Number(limit), Number(offset)]
+    );
+
     res.json(rows);
   } catch (e) {
-    console.error('list err:', e);
-    res.status(500).json({ error: 'db' });
+    console.error('list error:', e);
+    res.status(500).json({ error: 'list_failed' });
   }
 });
 
-const PORT = process.env.PORT || 3020;
-app.listen(PORT, () => console.log(`sim-api ${PORT} portunda`));
+const PORT = process.env.SIM_API_PORT || 3020;
+app.listen(PORT, () => {
+  console.log(`sim-api listening on ${PORT}`);
+});
