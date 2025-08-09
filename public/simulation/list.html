@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <title>Simulation – Liste</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100">
+  <div class="max-w-7xl mx-auto p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h1 id="title" class="text-2xl font-semibold">Liste</h1>
+      <a href="/simulation" class="text-sm text-sky-400 underline">← Özet</a>
+    </div>
+
+    <div class="overflow-x-auto rounded-2xl ring-1 ring-slate-800">
+      <table class="min-w-full text-sm">
+        <thead class="bg-slate-900/60">
+          <tr>
+            <th class="px-3 py-2 cursor-pointer sort" data-k="timestamp">Zaman</th>
+            <th class="px-3 py-2 cursor-pointer sort" data-k="coin">Coin</th>
+            <th class="px-3 py-2 cursor-pointer sort" data-k="price">Entry</th>
+            <th class="px-3 py-2 cursor-pointer sort" data-k="nprice">Exit</th>
+            <th class="px-3 py-2">Position</th>
+            <th class="px-3 py-2 cursor-pointer sort" data-k="pnl">%PnL</th>
+          </tr>
+        </thead>
+        <tbody id="rows" class="divide-y divide-slate-800 bg-slate-900/30"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+  const params = new URLSearchParams(location.search);
+  let type = params.get('type') || 'long';
+  let sort = 'timestamp';
+  let dir = 'desc';
+
+  document.getElementById('title').textContent = `Koşul: ${type}`;
+
+  function fmtNum(v, d=2) {
+    if (v == null) return '-';
+    const n = Number(v);
+    return isFinite(n) ? n.toFixed(d) : '-';
+    }
+
+  async function load() {
+    const url = `/simulation/api/list?type=${encodeURIComponent(type)}&sort=${sort}&dir=${dir}&limit=300`;
+    const res = await fetch(url);
+    const { ok, data } = await res.json();
+    if (!ok) throw new Error('list failed');
+
+    const tbody = document.getElementById('rows');
+    tbody.innerHTML = '';
+    data.forEach(r => {
+      const tr = document.createElement('tr');
+      const ts = new Date(r.timestamp).toLocaleString();
+      const pnlColor = r.pnl > 0 ? 'text-green-400' : (r.pnl < 0 ? 'text-red-400' : 'text-slate-300');
+      tr.innerHTML = `
+        <td class="px-3 py-2 whitespace-nowrap">${ts}</td>
+        <td class="px-3 py-2">${r.coin}</td>
+        <td class="px-3 py-2">${fmtNum(r.price, 6)}</td>
+        <td class="px-3 py-2">${fmtNum(r.nprice, 6)}</td>
+        <td class="px-3 py-2">${r.position}</td>
+        <td class="px-3 py-2 ${pnlColor} font-medium">${fmtNum(r.pnl, 2)}%</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  document.querySelectorAll('.sort').forEach(th => {
+    th.addEventListener('click', () => {
+      const k = th.dataset.k;
+      if (sort === k) {
+        dir = (dir === 'asc') ? 'desc' : 'asc';
+      } else {
+        sort = k;
+        dir = 'desc';
+      }
+      load();
+    });
+  });
+
+  load().catch(err => {
+    document.getElementById('rows').innerHTML =
+      `<tr><td class="px-3 py-3 text-red-400">Liste yüklenemedi.</td></tr>`;
+    console.error(err);
+  });
+  </script>
+</body>
+</html>
