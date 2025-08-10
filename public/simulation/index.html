@@ -36,8 +36,13 @@
           const totalFmt = (isFinite(total) ? total : 0).toFixed(2);
           const pnlClass = (avg >= 0 ? 'pnl-pos' : 'pnl-neg');
 
-          const card = document.createElement('div');
-          card.className = 'card';
+          const posQS = encodeURIComponent(item.position || '');
+const href = `list.html?position=${posQS}`;
+
+const card = document.createElement('a');
+        
+          ccard.className = 'card card-link';
+card.href = href;
           card.innerHTML = `
             <h3>${item.position || 'Bilinmeyen'}
               <span class="badge">${trades} işlem</span>
