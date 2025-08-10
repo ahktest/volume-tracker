@@ -2,126 +2,121 @@
 <html lang="tr">
 <head>
   <meta charset="UTF-8">
-  <title>Simulation Liste</title>
+  <title>Simülasyon Listesi</title>
   <link rel="stylesheet" href="style.css">
   <style>
-    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-    th, td { padding: 8px 10px; border-bottom: 1px solid #333; color: #ddd; }
-    th { background-color: #2a2a2a; cursor: pointer; user-select: none; position: relative; }
-    th.sort-asc::after { content: "▲"; position: absolute; right: 10px; font-size: 11px; opacity: .8; }
-    th.sort-desc::after { content: "▼"; position: absolute; right: 10px; font-size: 11px; opacity: .8; }
-    .gain { color: #4ade80; }
-    .loss { color: #f87171; }
+    body {
+      background-color: #121212;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: auto;
+      padding: 2rem;
+    }
+
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 1.5rem;
+      color: #fff;
+    }
+
+    .table-wrapper {
+      background-color: #1e1e1e;
+      padding: 1rem;
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 800px;
+    }
+
+    th, td {
+      padding: 0.75rem 1rem;
+      text-align: left;
+    }
+
+    th {
+      background-color: #2a2a2a;
+    }
+
+    tr:nth-child(even) {
+      background-color: #181818;
+    }
+
+    tr:hover {
+      background-color: #242424;
+    }
+
+    .pnl-pos {
+      color: #4caf50;
+      font-weight: bold;
+    }
+
+    .pnl-neg {
+      color: #f44336;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1 id="pageTitle"></h1>
-    <table id="simTable">
-      <thead>
-        <tr>
-          <th data-sort="coin">Coin</th>
-          <th data-sort="price">Giriş Fiyatı</th>
-          <th data-sort="nprice">Çıkış Fiyatı</th>
-          <th data-sort="pnl">PnL (%)</th>
-          <th data-sort="timestamp">Tarih</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
+    <h1 id="page-title"></h1>
+    <div class="table-wrapper">
+      <table id="trade-table">
+        <thead>
+          <tr>
+            <th>Coin</th>
+            <th>Giriş Fiyatı</th>
+            <th>Çıkış Fiyatı</th>
+            <th>PnL (%)</th>
+            <th>Tarih</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
   </div>
 
   <script>
-    const params = new URLSearchParams(window.location.search);
-    const position = params.get('position');
-    document.getElementById('pageTitle').textContent = position;
+    async function loadList(){
+      const params = new URLSearchParams(window.location.search);
+      const position = params.get('position') || '';
+      document.getElementById('page-title').textContent = decodeURIComponent(position);
 
-    let rowsData = [];
-    let sortState = { key: 'timestamp', dir: 'desc' }; // default: en yeni üstte
+      try {
+        const res = await fetch(`/api/sim/list?position=${encodeURIComponent(position)}`);
+        if(!res.ok) throw new Error('API ' + res.status);
+        const data = await res.json();
 
-    function fmtNum(val, digits = 2) {
-      if (val === null || val === undefined || val === '') return '-';
-      const n = Number(val);
-      if (Number.isNaN(n)) return '-';
-      return n.toFixed(digits);
+        const tbody = document.querySelector('#trade-table tbody');
+        tbody.innerHTML = '';
+
+        data.forEach(row => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${row.symbol}</td>
+            <td>${row.entry_price ?? '-'}</td>
+            <td>${row.exit_price ?? '-'}</td>
+            <td class="${row.pnl >= 0 ? 'pnl-pos' : 'pnl-neg'}">
+              ${row.pnl != null ? row.pnl : '-'}
+            </td>
+            <td>${row.date || ''}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } catch (err) {
+        console.error(err);
+      }
     }
-
-    function renderTable() {
-      const tbody = document.querySelector('#simTable tbody');
-      tbody.innerHTML = '';
-
-      // sıralama
-      const data = [...rowsData].sort((a, b) => {
-        const dir = sortState.dir === 'asc' ? 1 : -1;
-        const k = sortState.key;
-
-        // tarih için epoch karşılaştır
-        if (k === 'timestamp') {
-          const av = new Date(a.timestamp).getTime() || 0;
-          const bv = new Date(b.timestamp).getTime() || 0;
-          return av === bv ? 0 : (av > bv ? dir : -dir);
-        }
-
-        // sayısal kolonlar
-        if (['price','nprice','pnl'].includes(k)) {
-          const av = a[k] == null ? NaN : Number(a[k]);
-          const bv = b[k] == null ? NaN : Number(b[k]);
-          if (Number.isNaN(av) && Number.isNaN(bv)) return 0;
-          if (Number.isNaN(av)) return 1;   // null/NaN en alta
-          if (Number.isNaN(bv)) return -1;
-          return av === bv ? 0 : (av > bv ? dir : -dir);
-        }
-
-        // metin kolon
-        const av = (a[k] ?? '').toString().toLowerCase();
-        const bv = (b[k] ?? '').toString().toLowerCase();
-        if (av === bv) return 0;
-        return av > bv ? dir : -dir;
-      });
-
-      // doldur
-      data.forEach(row => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${row.coin}</td>
-          <td>${fmtNum(row.price, 8)}</td>
-          <td>${row.nprice == null ? '-' : fmtNum(row.nprice, 8)}</td>
-          <td class="${row.pnl > 0 ? 'gain' : (row.pnl < 0 ? 'loss' : '')}">${row.pnl == null ? '-' : fmtNum(row.pnl, 2)}</td>
-          <td>${new Date(row.timestamp).toLocaleString()}</td>
-        `;
-        tbody.appendChild(tr);
-      });
-
-      // başlıktaki ok ikonlarını güncelle
-      document.querySelectorAll('th[data-sort]').forEach(th => {
-        th.classList.remove('sort-asc','sort-desc');
-        if (th.dataset.sort === sortState.key) {
-          th.classList.add(sortState.dir === 'asc' ? 'sort-asc' : 'sort-desc');
-        }
-      });
-    }
-
-    async function loadList() {
-      const res = await fetch(`/api/sim/list?position=${encodeURIComponent(position)}`);
-      rowsData = await res.json();
-      renderTable();
-    }
-
-    // başlık tıklama olayları
-    document.querySelectorAll('th[data-sort]').forEach(th => {
-      th.addEventListener('click', () => {
-        const key = th.dataset.sort;
-        if (sortState.key === key) {
-          sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
-        } else {
-          sortState.key = key;
-          // sayısal kolonlarda default desc, metinde asc
-          sortState.dir = ['price','nprice','pnl','timestamp'].includes(key) ? 'desc' : 'asc';
-        }
-        renderTable();
-      });
-    });
-
     loadList();
   </script>
 </body>
