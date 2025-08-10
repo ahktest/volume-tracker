@@ -1,32 +1,31 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-  <meta charset="UTF-8">
-  <title>Simulation Koşullar</title>
-  <div class="subtitle">Güncel strateji gruplarının toplam ve ortalama PnL performansı</div>
-  <link rel="stylesheet" href="style.css">
-  
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Simülasyon Koşullar</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="container">
-    <h1>Simulasyon Özeti</h1>
-    <div id="grid" class="grid"></div>
-  </div>
+  <header class="header">
+    <h1 class="title">Simülasyon Özeti</h1>
+    <div class="subtitle">Güncel strateji gruplarının toplam ve ortalama PnL performansı</div>
+  </header>
+
+  <!-- JS burayı dolduracak -->
+  <main class="grid" id="cards"></main>
 
   <script>
     async function loadSummary(){
       try{
         const res = await fetch('/api/sim/summary', { headers: { 'Accept': 'application/json' }});
-        if(!res.ok){
-          throw new Error('API ' + res.status);
-        }
-        const data = await res.json();
+        if(!res.ok) throw new Error('API ' + res.status);
 
+        const data = await res.json();
         const cardsEl = document.getElementById('cards');
         cardsEl.innerHTML = '';
 
         data.forEach(item => {
-          // Backend’den gelebilecek string/nullları güvenle sayıya çevir
           const trades = Number(item.trades ?? 0);
           const total = Number(item.total_pnl ?? 0);
           const avg = trades > 0
@@ -51,7 +50,9 @@
       }catch(err){
         console.error('Özet yüklenemedi:', err);
         const cardsEl = document.getElementById('cards');
-        cardsEl.innerHTML = `<div class="card"><h3>Hata</h3><div class="meta">Özet yüklenemedi. Daha sonra tekrar deneyin.</div></div>`;
+        if (cardsEl) {
+          cardsEl.innerHTML = `<div class="card"><h3>Hata</h3><div class="meta">Özet yüklenemedi. Daha sonra tekrar deneyin.</div></div>`;
+        }
       }
     }
 
