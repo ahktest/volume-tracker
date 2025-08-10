@@ -1,167 +1,128 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-  <meta charset="UTF-8" />
-  <title>Simülasyon Listesi</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta charset="UTF-8">
+  <title>Simulation Liste</title>
+  <link rel="stylesheet" href="style.css">
   <style>
-    /* Koyu tema – index.html ile uyumlu */
-    body{background:#121212;color:#eaeaea;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial}
-    .container{max-width:1200px;margin:0 auto;padding:24px}
-    h1{margin:0 0 16px;font-size:28px;font-weight:700}
-
-    .table-wrap{background:#1e1e1e;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.25);overflow:auto}
-    table{width:100%;min-width:860px;border-collapse:collapse}
-    th,td{padding:12px 14px;text-align:left;border-bottom:1px solid #2b2b2b}
-    th{background:#2a2a2a;position:relative;user-select:none;cursor:pointer;font-weight:700}
-    tr:nth-child(even){background:#181818}
-    tr:hover{background:#242424}
-
-    /* sıralama okları */
-    th .arrow{position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:11px;opacity:.65}
-    th.sort-asc .arrow::after{content:"▲"}
-    th.sort-desc .arrow::after{content:"▼"}
-
-    .pnl-pos{color:#4caf50;font-weight:700}
-    .pnl-neg{color:#f44336;font-weight:700}
-
-    /* üst bar */
-    .toolbar{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:12px}
-    .back{color:#aaa;text-decoration:none;padding:6px 10px;border:1px solid #333;border-radius:8px}
-    .back:hover{background:#222}
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid #333; color: #ddd; }
+    th { background-color: #2a2a2a; cursor: pointer; user-select: none; position: relative; }
+    th.sort-asc::after { content: "▲"; position: absolute; right: 10px; font-size: 11px; opacity: .8; }
+    th.sort-desc::after { content: "▼"; position: absolute; right: 10px; font-size: 11px; opacity: .8; }
+    .gain { color: #4ade80; }
+    .loss { color: #f87171; }
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="toolbar">
-      <h1 id="pageTitle">Simülasyon Listesi</h1>
-      <a class="back" href="/simulation/">← Özet sayfasına dön</a>
-    </div>
-
-    <div class="table-wrap">
-      <table id="tbl">
-        <thead>
-          <tr>
-            <th data-key="symbol">Coin <span class="arrow"></span></th>
-            <th data-key="entry_price">Giriş Fiyatı <span class="arrow"></span></th>
-            <th data-key="exit_price">Çıkış Fiyatı <span class="arrow"></span></th>
-            <th data-key="pnl">PnL (%) <span class="arrow"></span></th>
-            <th data-key="date">Tarih <span class="arrow"></span></th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </div>
+    <h1 id="pageTitle"></h1>
+    <table id="simTable">
+      <thead>
+        <tr>
+          <th data-sort="coin">Coin</th>
+          <th data-sort="price">Giriş Fiyatı</th>
+          <th data-sort="nprice">Çıkış Fiyatı</th>
+          <th data-sort="pnl">PnL (%)</th>
+          <th data-sort="timestamp">Tarih</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
   </div>
 
   <script>
-    // ===== Helpers
-    const qs = new URLSearchParams(location.search);
-    const position = qs.get('position') || '';
-    document.getElementById('pageTitle').textContent = decodeURIComponent(position);
+    const params = new URLSearchParams(window.location.search);
+    const position = params.get('position');
+    document.getElementById('pageTitle').textContent = position;
 
-    function toNumber(v) {
-      if (v === null || v === undefined || v === '') return null;
-      const n = Number(v);
-      return Number.isFinite(n) ? n : null;
-    }
-    function fmtNum(v, d=2) {
-      const n = toNumber(v);
-      return n === null ? '-' : n.toFixed(d);
-    }
+    let rowsData = [];
+    let sortState = { key: 'timestamp', dir: 'desc' }; // default: en yeni üstte
 
-    // "DD.MM.YYYY HH:mm:ss" → epoch
-    function dateToEpoch(str) {
-      if (!str) return 0;
-      // örn: "10.08.2025 13:00:53"
-      const [datePart, timePart='00:00:00'] = String(str).split(' ');
-      const [DD, MM, YYYY] = datePart.split('.').map(Number);
-      const [hh='00', mm='00', ss='00'] = timePart.split(':');
-      const dt = new Date(YYYY, (MM||1)-1, DD||1, Number(hh), Number(mm), Number(ss));
-      return dt.getTime();
+    function fmtNum(val, digits = 2) {
+      if (val === null || val === undefined || val === '') return '-';
+      const n = Number(val);
+      if (Number.isNaN(n)) return '-';
+      return n.toFixed(digits);
     }
 
-    // ===== State
-    let rows = [];
-    let sort = { key: 'date', dir: 'desc' }; // en yeni üstte
-
-    function render() {
-      const tbody = document.querySelector('#tbl tbody');
+    function renderTable() {
+      const tbody = document.querySelector('#simTable tbody');
       tbody.innerHTML = '';
 
-      const sorted = [...rows].sort((a, b) => {
-        const dir = sort.dir === 'asc' ? 1 : -1;
-        const k = sort.key;
+      // sıralama
+      const data = [...rowsData].sort((a, b) => {
+        const dir = sortState.dir === 'asc' ? 1 : -1;
+        const k = sortState.key;
 
-        if (k === 'date') {
-          const av = dateToEpoch(a.date);
-          const bv = dateToEpoch(b.date);
+        // tarih için epoch karşılaştır
+        if (k === 'timestamp') {
+          const av = new Date(a.timestamp).getTime() || 0;
+          const bv = new Date(b.timestamp).getTime() || 0;
           return av === bv ? 0 : (av > bv ? dir : -dir);
         }
 
-        if (['entry_price','exit_price','pnl'].includes(k)) {
-          const av = toNumber(a[k]);
-          const bv = toNumber(b[k]);
-          if (av === null && bv === null) return 0;
-          if (av === null) return 1;
-          if (bv === null) return -1;
+        // sayısal kolonlar
+        if (['price','nprice','pnl'].includes(k)) {
+          const av = a[k] == null ? NaN : Number(a[k]);
+          const bv = b[k] == null ? NaN : Number(b[k]);
+          if (Number.isNaN(av) && Number.isNaN(bv)) return 0;
+          if (Number.isNaN(av)) return 1;   // null/NaN en alta
+          if (Number.isNaN(bv)) return -1;
           return av === bv ? 0 : (av > bv ? dir : -dir);
         }
 
+        // metin kolon
         const av = (a[k] ?? '').toString().toLowerCase();
         const bv = (b[k] ?? '').toString().toLowerCase();
         if (av === bv) return 0;
         return av > bv ? dir : -dir;
       });
 
-      sorted.forEach(r => {
+      // doldur
+      data.forEach(row => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td>${r.symbol}</td>
-          <td>${fmtNum(r.entry_price, 8)}</td>
-          <td>${r.exit_price == null ? '-' : fmtNum(r.exit_price, 8)}</td>
-          <td class="${toNumber(r.pnl) >= 0 ? 'pnl-pos' : 'pnl-neg'}">${r.pnl == null ? '-' : fmtNum(r.pnl, 2)}</td>
-          <td>${r.date || ''}</td>
+          <td>${row.coin}</td>
+          <td>${fmtNum(row.price, 8)}</td>
+          <td>${row.nprice == null ? '-' : fmtNum(row.nprice, 8)}</td>
+          <td class="${row.pnl > 0 ? 'gain' : (row.pnl < 0 ? 'loss' : '')}">${row.pnl == null ? '-' : fmtNum(row.pnl, 2)}</td>
+          <td>${new Date(row.timestamp).toLocaleString()}</td>
         `;
         tbody.appendChild(tr);
       });
 
-      // okları güncelle
-      document.querySelectorAll('th[data-key]').forEach(th => {
+      // başlıktaki ok ikonlarını güncelle
+      document.querySelectorAll('th[data-sort]').forEach(th => {
         th.classList.remove('sort-asc','sort-desc');
-        if (th.dataset.key === sort.key) {
-          th.classList.add(sort.dir === 'asc' ? 'sort-asc' : 'sort-desc');
+        if (th.dataset.sort === sortState.key) {
+          th.classList.add(sortState.dir === 'asc' ? 'sort-asc' : 'sort-desc');
         }
       });
     }
 
-    async function load() {
-      try {
-        const url = `/api/sim/list?position=${encodeURIComponent(position)}`;
-        const res = await fetch(url, { headers: { 'Accept': 'application/json' }});
-        if (!res.ok) throw new Error('API ' + res.status);
-        rows = await res.json();
-        render();
-      } catch (e) {
-        console.error('Liste yüklenemedi:', e);
-      }
+    async function loadList() {
+      const res = await fetch(`/api/sim/list?position=${encodeURIComponent(position)}`);
+      rowsData = await res.json();
+      renderTable();
     }
 
-    // Başlık tıklama – sıralama
-    document.querySelectorAll('th[data-key]').forEach(th => {
+    // başlık tıklama olayları
+    document.querySelectorAll('th[data-sort]').forEach(th => {
       th.addEventListener('click', () => {
-        const key = th.dataset.key;
-        if (sort.key === key) {
-          sort.dir = sort.dir === 'asc' ? 'desc' : 'asc';
+        const key = th.dataset.sort;
+        if (sortState.key === key) {
+          sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
         } else {
-          sort.key = key;
-          sort.dir = ['entry_price','exit_price','pnl','date'].includes(key) ? 'desc' : 'asc';
+          sortState.key = key;
+          // sayısal kolonlarda default desc, metinde asc
+          sortState.dir = ['price','nprice','pnl','timestamp'].includes(key) ? 'desc' : 'asc';
         }
-        render();
+        renderTable();
       });
     });
 
-    load();
+    loadList();
   </script>
 </body>
 </html>
