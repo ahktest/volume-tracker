@@ -75,8 +75,10 @@ app.get('/api/sim/list', async (req, res) => {
         id,
         timestamp,
         coin,
+        coinslug,
         CAST(price  AS DOUBLE) AS price,
         position,
+        CAST(volume_percent AS DOUBLE) AS volume_percent,
         CAST(nprice AS DOUBLE) AS nprice,
         CAST(pnl    AS DOUBLE) AS pnl
       FROM simulasyon
