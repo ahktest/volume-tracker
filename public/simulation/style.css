@@ -23,7 +23,62 @@ body{
 }
 
 /* başlık */
-.header{
+
+/* Genel header container */
+.header {
+    display: flex;
+    justify-content: space-between; /* Sol ve sağ içerikler arası boşluk */
+    align-items: center; /* Dikey hizalama */
+    padding: 0 20px; /* Body ile aynı yatay boşluk */
+    max-width: 1200px; /* Body genişliği ile aynı sınır */
+    margin: 0 auto; /* Ortalamak için */
+    height: 70px; /* Header yüksekliği */
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1); /* İnce alt çizgi */
+}
+
+/* Sol taraf: Logo + Başlık */
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px; /* Logo ile başlık arası boşluk */
+}
+
+.header-left img {
+    height: 40px; /* Logo boyutu */
+    width: auto;
+}
+
+.header-left h1 {
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: white;
+    margin: 0;
+}
+
+/* Sağ taraf: Açıklama */
+.header-right {
+    font-size: 0.95rem;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+/* Mobil uyum */
+@media (max-width: 768px) {
+    .header {
+        flex-direction: column;
+        align-items: flex-start;
+        height: auto;
+        padding: 10px;
+        gap: 5px;
+    }
+
+    .header-right {
+        font-size: 0.85rem;
+    }
+}
+
+
+
+/*.header{
     display: flex;
   justify-content: space-between;
   align-items: center;
@@ -32,8 +87,8 @@ body{
   margin-bottom: 20px;
   /*max-width:1200px;
   margin:28px auto 8px;
-  padding:0 16px;*/
-}
+  padding:0 16px;
+}*/
 .title{
   font-family: "Georgia", "Times New Roman", serif;
   font-weight:700;
