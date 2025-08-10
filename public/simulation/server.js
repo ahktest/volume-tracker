@@ -1,88 +1,105 @@
-// public/simulation/server.js  (CommonJS)
+// server.js  (CommonJS)
+// Çalıştırma: pm2 restart sim-api  (veya node server.js)
+
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
 const mysql = require('mysql2/promise');
-const dotenv = require('dotenv');
-
-// .env kökte: /var/www/volume-tracker/.env
-dotenv.config({ path: path.join(__dirname, '../../.env') });
+require('dotenv').config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const db = mysql.createPool({
-  host: process.env.DB_HOST || '127.0.0.1',
-  user: process.env.DB_USER,
-  password: process.env.DB_PASS,
-  database: process.env.DB_NAME || 'volume_tracker',
+// .env yoksa varsayılanları kullan
+const DB_HOST = process.env.DB_HOST || '127.0.0.1';
+const DB_USER = process.env.DB_USER || 'ahktest';
+const DB_PASS = process.env.DB_PASS || '123';
+const DB_NAME = process.env.DB_NAME || 'volume_tracker';
+const PORT    = process.env.SIM_API_PORT || 3020;
+
+// DECIMAL’ları number döndürmesi için: decimalNumbers: true
+const pool = mysql.createPool({
+  host: DB_HOST,
+  user: DB_USER,
+  password: DB_PASS,
+  database: DB_NAME,
   waitForConnections: true,
   connectionLimit: 5,
+  queueLimit: 0,
+  decimalNumbers: true, // <-- kritik
 });
 
-// Sağlık kontrolü
-app.get('/health', (req, res) => res.send('ok'));
+app.get('/health', (_req, res) => res.send('ok'));
 
-// Özet: koşul bazlı PnL performansı
-app.get('/api/sim/summary', async (req, res) => {
+/**
+ * Özet endpoint:
+ * avg_pnl ve total_pnl FRONTEND'e number olarak gitsin diye
+ * CAST(... AS DOUBLE) ile garanti altına aldık.
+ */
+app.get('/api/sim/summary', async (_req, res) => {
+  let conn;
   try {
-    const [rows] = await db.query(`
-      SELECT position,
-             COUNT(*) as trades,
-             AVG(pnl)   as avg_pnl,
-             SUM(pnl)   as total_pnl
+    conn = await pool.getConnection();
+    const [rows] = await conn.query(`
+      SELECT
+        position,
+        COUNT(*) AS trades,
+        CAST(ROUND(AVG(pnl), 2) AS DOUBLE)  AS avg_pnl,
+        CAST(ROUND(SUM(pnl), 2) AS DOUBLE)  AS total_pnl
       FROM simulasyon
       WHERE pnl IS NOT NULL
       GROUP BY position
-      ORDER BY total_pnl DESC
+      ORDER BY trades DESC, position ASC
     `);
     res.json(rows);
-  } catch (e) {
-    console.error('summary error:', e);
-    res.status(500).json({ error: 'summary_failed' });
+  } catch (err) {
+    console.error('❌ /api/sim/summary hata:', err);
+    res.status(500).json({ error: 'summary_error' });
+  } finally {
+    if (conn) conn.release();
   }
 });
 
-// Liste: ?position=long&sort=pnl_desc&limit=50&offset=0
+/**
+ * Liste endpoint (opsiyonel): /api/sim/list?position=long
+ * Tablo sayfası için verileri döner.
+ */
 app.get('/api/sim/list', async (req, res) => {
+  const { position } = req.query; // ör: 'long', 'potansiyel long', 'short', ...
+  let conn;
   try {
-    const { position, sort = 'timestamp_desc', limit = 50, offset = 0 } = req.query;
+    conn = await pool.getConnection();
 
-    const allowedSort = {
-      'timestamp_desc': 'timestamp DESC',
-      'timestamp_asc' : 'timestamp ASC',
-      'pnl_desc'      : 'pnl DESC',
-      'pnl_asc'       : 'pnl ASC',
-      'price_desc'    : 'price DESC',
-      'price_asc'     : 'price ASC',
-    };
-    const orderBy = allowedSort[sort] || allowedSort.timestamp_desc;
-
+    let sql = `
+      SELECT
+        id,
+        timestamp,
+        coin,
+        CAST(price  AS DOUBLE) AS price,
+        position,
+        CAST(nprice AS DOUBLE) AS nprice,
+        CAST(pnl    AS DOUBLE) AS pnl
+      FROM simulasyon
+    `;
     const params = [];
-    let where = '1=1';
+
     if (position) {
-      where += ' AND position = ?';
+      sql += ` WHERE position = ?`;
       params.push(position);
     }
 
-    const [rows] = await db.query(
-      `SELECT id, timestamp, coin, price, position, nprice, pnl
-       FROM simulasyon
-       WHERE ${where}
-       ORDER BY ${orderBy}
-       LIMIT ? OFFSET ?`,
-      [...params, Number(limit), Number(offset)]
-    );
+    sql += ` ORDER BY timestamp DESC LIMIT 500`;
 
+    const [rows] = await conn.query(sql, params);
     res.json(rows);
-  } catch (e) {
-    console.error('list error:', e);
-    res.status(500).json({ error: 'list_failed' });
+  } catch (err) {
+    console.error('❌ /api/sim/list hata:', err);
+    res.status(500).json({ error: 'list_error' });
+  } finally {
+    if (conn) conn.release();
   }
 });
 
-const PORT = process.env.SIM_API_PORT || 3020;
 app.listen(PORT, () => {
-  console.log(`sim-api listening on ${PORT}`);
+  console.log(`✅ sim-api hazır: http://127.0.0.1:${PORT}`);
 });
