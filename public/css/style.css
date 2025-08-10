@@ -1,4 +1,19 @@
 /* Reset ve temel ayarlar */
+:root{
+  --bg: #0b0f14;              /* sayfa arka planı */
+  --panel: #151a21;           /* kart zemini */
+  --panel-2: #1a2230;
+  --text: #e7edf5;            /* ana yazı */
+  --muted: #a7b3c2;           /* ikincil yazı */
+  --accent: #6bc3ff;          /* vurgu */
+  --ok: #6ee7a8;
+  --warn: #fbbf24;
+  --bad: #f87171;
+  --shadow: 0 8px 24px rgba(0,0,0,.35);
+  --radius: 16px;
+}
+
+
 * {
   margin: 0;
   padding: 0;
