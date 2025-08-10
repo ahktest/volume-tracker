@@ -3,37 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <title>Simulation Koşullar</title>
-  <link rel="stylesheet" href="css/style.css">
-  <style>
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill,minmax(260px,1fr));
-      gap: 14px;
-      margin-top: 16px;
-    }
-    .card {
-      background-color: #1f1f1f;
-      border: 1px solid #333;
-      border-radius: 8px;
-      padding: 14px;
-      color: #ddd;
-      text-decoration: none;
-      transition: background-color 0.2s;
-    }
-    .card:hover {
-      background-color: #2a2a2a;
-    }
-    .title {
-      font-weight: 600;
-      margin-bottom: 8px;
-    }
-    .pos-long {
-      color: #4ade80;
-    }
-    .pos-short {
-      color: #f87171;
-    }
-  </style>
+  <div class="subtitle">Güncel strateji gruplarının toplam ve ortalama PnL performansı</div>
+  <link rel="stylesheet" href="style.css">
+  
 </head>
 <body>
   <div class="container">
@@ -42,23 +14,45 @@
   </div>
 
   <script>
-    async function loadSummary() {
-      const res = await fetch('/api/sim/summary');
-      const data = await res.json();
-      const grid = document.getElementById('grid');
-      grid.innerHTML = '';
+    async function loadSummary(){
+      try{
+        const res = await fetch('/api/sim/summary', { headers: { 'Accept': 'application/json' }});
+        if(!res.ok){
+          throw new Error('API ' + res.status);
+        }
+        const data = await res.json();
 
-      data.forEach(item => {
-        const a = document.createElement('a');
-        a.href = `/simulation/list.html?position=${encodeURIComponent(item.position)}`;
-        a.className = 'card';
-        a.innerHTML = `
-          <div class="title">${item.position}</div>
-          <div>Toplam: ${item.count}</div>
-          <div>Ortalama PnL: ${item.avg_pnl ? item.avg_pnl.toFixed(2) + '%' : '-'}</div>
-        `;
-        grid.appendChild(a);
-      });
+        const cardsEl = document.getElementById('cards');
+        cardsEl.innerHTML = '';
+
+        data.forEach(item => {
+          // Backend’den gelebilecek string/nullları güvenle sayıya çevir
+          const trades = Number(item.trades ?? 0);
+          const total = Number(item.total_pnl ?? 0);
+          const avg = trades > 0
+            ? Number(item.avg_pnl ?? (total / trades))
+            : Number(item.avg_pnl ?? 0);
+
+          const avgFmt = (isFinite(avg) ? avg : 0).toFixed(2);
+          const totalFmt = (isFinite(total) ? total : 0).toFixed(2);
+          const pnlClass = (avg >= 0 ? 'pnl-pos' : 'pnl-neg');
+
+          const card = document.createElement('div');
+          card.className = 'card';
+          card.innerHTML = `
+            <h3>${item.position || 'Bilinmeyen'}
+              <span class="badge">${trades} işlem</span>
+            </h3>
+            <div class="meta"><strong>Toplam:</strong> ${totalFmt}%</div>
+            <div class="meta"><strong>Ortalama PnL:</strong> <span class="${pnlClass}">${avgFmt}%</span></div>
+          `;
+          cardsEl.appendChild(card);
+        });
+      }catch(err){
+        console.error('Özet yüklenemedi:', err);
+        const cardsEl = document.getElementById('cards');
+        cardsEl.innerHTML = `<div class="card"><h3>Hata</h3><div class="meta">Özet yüklenemedi. Daha sonra tekrar deneyin.</div></div>`;
+      }
     }
 
     loadSummary();
