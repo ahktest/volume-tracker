@@ -13,20 +13,23 @@
     th.sort-desc::after { content: "▼"; position: absolute; right: 10px; font-size: 11px; opacity: .8; }
     .gain { color: #4ade80; }
     .loss { color: #f87171; }
+    .coin-link { color: #9cd1ff; text-decoration: none; }
+    .coin-link:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
-    <header class="header">
+  <header class="header">
     <div class="header-left">
-    <div class="logo" aria-label="Candlestick logo" role="img">
+      <div class="logo" aria-label="Candlestick logo" role="img">
         <a href="/simulation" class="logo" aria-label="Candlestick logo" role="img">
-        <img src="../logo.svg" alt="Logo" height="40" />
+          <img src="../logo.svg" alt="Logo" height="40" />
         </a>
-    </div>
-    <h1 class="title">Simülasyon Özeti</h1>
+      </div>
+      <h1 class="title">Simülasyon Özeti</h1>
     </div>
     <div class="header-right">Güncel strateji gruplarının toplam ve ortalama PnL performansı</div>
   </header>
+
   <div class="container">
     <h1 id="pageTitle"></h1>
     <table id="simTable">
@@ -36,6 +39,7 @@
           <th data-sort="price">Giriş Fiyatı</th>
           <th data-sort="nprice">Çıkış Fiyatı</th>
           <th data-sort="pnl">PnL (%)</th>
+          <th data-sort="volume_percent">Hacim Δ (%)</th>
           <th data-sort="timestamp">Tarih</th>
         </tr>
       </thead>
@@ -45,7 +49,7 @@
 
   <script>
     const params = new URLSearchParams(window.location.search);
-    const position = params.get('position');
+    const position = params.get('position') || '';
     document.getElementById('pageTitle').textContent = position;
 
     let rowsData = [];
@@ -67,38 +71,44 @@
         const dir = sortState.dir === 'asc' ? 1 : -1;
         const k = sortState.key;
 
-        // tarih için epoch karşılaştır
         if (k === 'timestamp') {
           const av = new Date(a.timestamp).getTime() || 0;
           const bv = new Date(b.timestamp).getTime() || 0;
           return av === bv ? 0 : (av > bv ? dir : -dir);
         }
 
-        // sayısal kolonlar
-        if (['price','nprice','pnl'].includes(k)) {
+        if (['price','nprice','pnl','volume_percent'].includes(k)) {
           const av = a[k] == null ? NaN : Number(a[k]);
           const bv = b[k] == null ? NaN : Number(b[k]);
           if (Number.isNaN(av) && Number.isNaN(bv)) return 0;
-          if (Number.isNaN(av)) return 1;   // null/NaN en alta
+          if (Number.isNaN(av)) return 1;
           if (Number.isNaN(bv)) return -1;
           return av === bv ? 0 : (av > bv ? dir : -dir);
         }
 
-        // metin kolon
         const av = (a[k] ?? '').toString().toLowerCase();
         const bv = (b[k] ?? '').toString().toLowerCase();
         if (av === bv) return 0;
         return av > bv ? dir : -dir;
       });
 
-      // doldur
+      // satırları doldur
       data.forEach(row => {
         const tr = document.createElement('tr');
+
+        // Coin hücresi: coin_slug varsa link, yoksa düz metin
+        const coinCell = row.coinslug
+          ? `<a class="coin-link" href="/coin.html?slug=${encodeURIComponent(row.coinslug)}" target="_blank" rel="noopener noreferrer">${row.coin}</a>`
+          : `${row.coin}`;
+
+        const volClass = row.volume_percent > 0 ? 'gain' : (row.volume_percent < 0 ? 'loss' : '');
+
         tr.innerHTML = `
-          <td>${row.coin}</td>
+          <td>${coinCell}</td>
           <td>${fmtNum(row.price, 8)}</td>
           <td>${row.nprice == null ? '-' : fmtNum(row.nprice, 8)}</td>
           <td class="${row.pnl > 0 ? 'gain' : (row.pnl < 0 ? 'loss' : '')}">${row.pnl == null ? '-' : fmtNum(row.pnl, 2)}</td>
+          <td class="${volClass}">${row.volume_percent == null ? '-' : fmtNum(row.volume_percent, 2)}</td>
           <td>${new Date(row.timestamp).toLocaleString()}</td>
         `;
         tbody.appendChild(tr);
@@ -115,7 +125,20 @@
 
     async function loadList() {
       const res = await fetch(`/api/sim/list?position=${encodeURIComponent(position)}`);
-      rowsData = await res.json();
+      const json = await res.json();
+
+      // Backend objelerinde şu alanlar olmalı:
+      // coin, coin_slug, price, nprice, pnl, volume_percent, timestamp
+      rowsData = json.map(it => ({
+        coin: it.coin ?? it.symbol ?? '',
+        coinslug: it.coinslug ?? it.slug ?? null,
+        price: it.price ?? null,
+        nprice: it.nprice ?? null,
+        pnl: it.pnl ?? null,
+        volume_percent: it.volume_percent ?? null,
+        timestamp: it.timestamp
+      }));
+
       renderTable();
     }
 
@@ -127,8 +150,7 @@
           sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
         } else {
           sortState.key = key;
-          // sayısal kolonlarda default desc, metinde asc
-          sortState.dir = ['price','nprice','pnl','timestamp'].includes(key) ? 'desc' : 'asc';
+          sortState.dir = ['price','nprice','pnl','volume_percent','timestamp'].includes(key) ? 'desc' : 'asc';
         }
         renderTable();
       });
