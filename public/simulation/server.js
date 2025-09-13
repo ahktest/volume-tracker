@@ -47,7 +47,7 @@ app.get('/api/sim/summary', async (_req, res) => {
         CAST(ROUND(AVG(pnl), 2) AS DOUBLE)  AS avg_pnl,
         CAST(ROUND(SUM(pnl), 2) AS DOUBLE)  AS total_pnl
       FROM simulasyon
-      WHERE pnl IS NOT NULL
+      WHERE pnl IS NOT NULL AND timestamp > '2025-09-13 18:00:52'
       GROUP BY position
       ORDER BY trades DESC, position ASC
     `);
