@@ -86,7 +86,7 @@ app.get('/api/sim/list', async (req, res) => {
     const params = [];
 
     if (position) {
-      sql += ` WHERE position = ?`;
+      sql += ` WHERE position = ? AND timestamp > '2025-09-16 16:46:11`;
       params.push(position);
     }
 
