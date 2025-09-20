@@ -47,7 +47,7 @@ app.get('/api/sim/summary', async (_req, res) => {
         CAST(ROUND(AVG(pnl), 2) AS DOUBLE)  AS avg_pnl,
         CAST(ROUND(SUM(pnl), 2) AS DOUBLE)  AS total_pnl
       FROM simulasyon
-      WHERE pnl IS NOT NULL AND timestamp > '2025-09-20 23:46:11'
+      WHERE pnl IS NOT NULL AND timestamp > '2025-09-20 15:46:11'
       GROUP BY position
       ORDER BY trades DESC, position ASC
     `);
@@ -86,7 +86,7 @@ app.get('/api/sim/list', async (req, res) => {
     const params = [];
 
     if (position) {
-      sql += ` WHERE position = ? AND timestamp > '2025-09-16 16:46:11' `;
+      sql += ` WHERE position = ? AND timestamp > '2025-09-20 15:46:11' `;
       params.push(position);
     }
 
