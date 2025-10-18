@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <title>Result Worker – Sinyal Sonuçları</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, sans-serif; margin: 20px; }
+    h1 { margin-bottom: 8px; }
+    .bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:10px 0 16px; }
+    input, select, button { padding:8px 10px; font-size:14px; }
+    table { width:100%; border-collapse: collapse; }
+    th, td { padding:8px; border-bottom: 1px solid #4443; text-align:left; }
+    code.badge { padding:2px 6px; border-radius: 6px; font-size: 12px; }
+    .pos-long  { background:#0ea5e98f; }
+    .pos-short { background:#f871718f; }
+    .pos-none  { background:#9ca3af8f; }
+    .res-tp1 { background:#10b9818f; }
+    .res-tp2 { background:#22c55e8f; }
+    .res-sl  { background:#ef44448f; }
+    .res-timeout { background:#f59e0b8f; }
+  </style>
+</head>
+<body>
+  <h1>Result Worker – Sinyal Sonuçları</h1>
+
+  <div class="bar">
+    <input id="symbol" placeholder="Symbol (örn. BIDUSDT)" />
+    <select id="result">
+      <option value="">Sonuç (hepsi)</option>
+      <option value="null">result IS NULL</option>
+      <option value="tp1">tp1</option>
+      <option value="tp2">tp2</option>
+      <option value="sl">sl</option>
+      <option value="timeout">timeout</option>
+    </select>
+    <select id="since">
+      <option value="24">Son 24 saat</option>
+      <option value="48">Son 48 saat</option>
+      <option value="72" selected>Son 72 saat</option>
+      <option value="168">Son 7 gün</option>
+      <option value="720">Son 30 gün</option>
+    </select>
+    <select id="limit">
+      <option value="50">50</option>
+      <option value="100" selected>100</option>
+      <option value="200">200</option>
+      <option value="500">500</option>
+    </select>
+    <button id="load">Yükle</button>
+    <button id="refresh">Oto-Yenile: Kapalı</button>
+  </div>
+
+  <table id="tbl">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Zaman (UTC)</th>
+        <th>Symbol</th>
+        <th>Pos</th>
+        <th>Entry</th>
+        <th>TP1</th>
+        <th>TP2</th>
+        <th>SL</th>
+        <th>TP1%</th>
+        <th>TP2%</th>
+        <th>SL%</th>
+        <th>Result</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    const $ = sel => document.querySelector(sel);
+    const tbody = $('#tbl tbody');
+    const qs = o => Object.entries(o).filter(([,v]) => v!=='' && v!=null).map(([k,v]) => k+'='+encodeURIComponent(v)).join('&');
+
+    function badgePos(p) {
+      const cls = p==='long' ? 'pos-long' : p==='short' ? 'pos-short' : 'pos-none';
+      return `<code class="badge ${cls}">${p}</code>`;
+    }
+    function badgeRes(r) {
+      if (!r) return '';
+      const m = { tp1:'res-tp1', tp2:'res-tp2', sl:'res-sl', timeout:'res-timeout' };
+      return `<code class="badge ${m[r]||''}">${r}</code>`;
+    }
+    function fmt(n) {
+      if (n===null || n===undefined) return '';
+      const num = Number(n);
+      if (!Number.isFinite(num)) return '';
+      if (Math.abs(num) >= 1) return num.toFixed(6);
+      return num.toFixed(8);
+    }
+    function pct(n) {
+      if (n===null || n===undefined) return '';
+      const num = Number(n);
+      if (!Number.isFinite(num)) return '';
+      const sign = num>0?'+':'';
+      return sign + num.toFixed(2) + '%';
+    }
+
+    async function load() {
+      const params = {
+        symbol: $('#symbol').value.trim(),
+        result: $('#result').value,
+        since_hours: $('#since').value,
+        limit: $('#limit').value
+      };
+      const url = '/api/signals?' + qs(params);
+      const res = await fetch(url);
+      const data = await res.json();
+
+      tbody.innerHTML = data.map(r => `
+        <tr>
+          <td>${r.id}</td>
+          <td>${new Date(r.ts + 'Z').toISOString().replace('T',' ').replace('.000Z','')}</td>
+          <td>${r.symbol}</td>
+          <td>${badgePos(r.position)}</td>
+          <td>${fmt(r.entryprice)}</td>
+          <td>${fmt(r.tp1)}</td>
+          <td>${fmt(r.tp2)}</td>
+          <td>${fmt(r.sl)}</td>
+          <td>${pct(r.tp1_pct)}</td>
+          <td>${pct(r.tp2_pct)}</td>
+          <td>${pct(r.sl_pct)}</td>
+          <td>${badgeRes(r.result)}</td>
+        </tr>
+      `).join('');
+    }
+
+    let timer = null;
+    $('#load').addEventListener('click', load);
+    $('#refresh').addEventListener('click', () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+        $('#refresh').textContent = 'Oto-Yenile: Kapalı';
+      } else {
+        timer = setInterval(load, 5000);
+        $('#refresh').textContent = 'Oto-Yenile: 5 sn';
+      }
+    });
+
+    // sayfa açılışında yükle
+    load();
+  </script>
+</body>
+</html>

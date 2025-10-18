@@ -117,6 +117,72 @@ app.get('/coin/:slug/history', async (req, res) => {
 });
 
 
+app.get('/api/signals', async (req, res) => {
+  try {
+    const {
+      symbol,
+      result,
+      since_hours = '72',
+      limit = '100',
+    } = req.query;
+
+    const params = [];
+    let where = '1=1';
+
+    if (since_hours && Number(since_hours) > 0) {
+      where += ' AND ts >= (UTC_TIMESTAMP() - INTERVAL ? HOUR)';
+      params.push(Number(since_hours));
+    }
+    if (symbol) {
+      where += ' AND symbol = ?';
+      params.push(String(symbol).toUpperCase());
+    }
+    if (result) {
+      if (result === 'null') {
+        where += ' AND result IS NULL';
+      } else {
+        where += ' AND result = ?';
+        params.push(result);
+      }
+    }
+
+    const sql = `
+      SELECT
+        id, ts, symbol, position, entryprice, tp1, tp2, sl, result
+      FROM signals_simple
+      WHERE ${where}
+      ORDER BY ts DESC
+      LIMIT ?
+    `;
+    params.push(Math.min(Number(limit) || 100, 1000));
+
+    const [rows] = await pool.query(sql, params);
+
+    // yüzde farkları hesaplayıp ekleyelim (kullanışlı oluyor)
+    const withPct = rows.map(r => {
+      const entry = Number(r.entryprice);
+      const tp1 = Number(r.tp1);
+      const tp2 = Number(r.tp2);
+      const sl  = Number(r.sl);
+
+      const pct = (a,b)=> (Number.isFinite(a)&&Number.isFinite(b)&&b!==0)?(((a-b)/b)*100):null;
+
+      return {
+        ...r,
+        tp1_pct: Number.isFinite(pct(tp1, entry)) ? Number(pct(tp1, entry).toFixed(2)) : null,
+        tp2_pct: Number.isFinite(pct(tp2, entry)) ? Number(pct(tp2, entry).toFixed(2)) : null,
+        sl_pct:  Number.isFinite(pct(sl,  entry)) ? Number(pct(sl,  entry).toFixed(2))  : null,
+      };
+    });
+
+    res.json(withPct);
+  } catch (err) {
+    console.error('[/api/signals] Hata:', err);
+    res.status(500).json({ error: 'Veri alınamadı' });
+  }
+});
+
+
 // Sunucu başlatma
 app.listen(PORT, () => {
   console.log(`Sunucu çalışıyor: http://localhost:${PORT}`);
