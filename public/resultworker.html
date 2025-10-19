@@ -113,28 +113,28 @@
       const data = await res.json();
 
       tbody.innerHTML = data.map(r => {
-  // ts formatı: "2025-10-20 00:30:00" gibi geliyor
-  // Bunu ISO formatına çeviriyoruz: "2025-10-20T00:30:00Z"
-  const ts = r.ts ? new Date(r.ts.replace(' ', 'T') + 'Z') : null;
-  const tsStr = ts ? ts.toISOString().replace('T', ' ').replace('.000Z', '') : '';
+        // ts zaten ISO formatında geliyor, doğrudan Date objesi yapabiliriz
+        const ts = r.ts ? new Date(r.ts) : null;
+        const tsStr = ts ? ts.toISOString().replace('T', ' ').replace('.000Z', '') : '';
 
-  return `
-    <tr>
-      <td>${r.id}</td>
-      <td>${tsStr}</td>
-      <td>${r.symbol}</td>
-      <td>${badgePos(r.position)}</td>
-      <td>${fmt(r.entryprice)}</td>
-      <td>${fmt(r.tp1)}</td>
-      <td>${fmt(r.tp2)}</td>
-      <td>${fmt(r.sl)}</td>
-      <td>${pct(r.tp1_pct)}</td>
-      <td>${pct(r.tp2_pct)}</td>
-      <td>${pct(r.sl_pct)}</td>
-      <td>${badgeRes(r.result)}</td>
-    </tr>
-  `;
-}).join('');
+        return `
+            <tr>
+            <td>${r.id}</td>
+            <td>${tsStr}</td>
+            <td>${r.symbol}</td>
+            <td>${badgePos(r.position)}</td>
+            <td>${fmt(r.entryprice)}</td>
+            <td>${fmt(r.tp1)}</td>
+            <td>${fmt(r.tp2)}</td>
+            <td>${fmt(r.sl)}</td>
+            <td>${pct(r.tp1_pct)}</td>
+            <td>${pct(r.tp2_pct)}</td>
+            <td>${pct(r.sl_pct)}</td>
+            <td>${badgeRes(r.result)}</td>
+            </tr>
+        `;
+        }).join('');
+
 
     }
 
