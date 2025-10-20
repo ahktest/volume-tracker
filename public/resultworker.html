@@ -56,7 +56,9 @@
     <thead>
       <tr>
         <th>ID</th>
-        <th>Zaman (UTC)</th>
+        <th>Oluşturma (UTC)</th>
+        <th>Güncelleme (UTC)</th>
+        <th>Süre (h)</th>
         <th>Symbol</th>
         <th>Pos</th>
         <th>Entry</th>
@@ -75,7 +77,10 @@
   <script>
     const $ = sel => document.querySelector(sel);
     const tbody = $('#tbl tbody');
-    const qs = o => Object.entries(o).filter(([,v]) => v!=='' && v!=null).map(([k,v]) => k+'='+encodeURIComponent(v)).join('&');
+    const qs = o => Object.entries(o)
+      .filter(([,v]) => v!=='' && v!=null)
+      .map(([k,v]) => k+'='+encodeURIComponent(v))
+      .join('&');
 
     function badgePos(p) {
       const cls = p==='long' ? 'pos-long' : p==='short' ? 'pos-short' : 'pos-none';
@@ -101,6 +106,24 @@
       return sign + num.toFixed(2) + '%';
     }
 
+    // tarih biçimlendirici (UTC)
+    function fmtDate(d) {
+      if (!d) return '';
+      const dt = new Date(d);
+      if (isNaN(dt)) return '';
+      return dt.toISOString().replace('T', ' ').replace('.000Z', '');
+    }
+
+    // iki tarih arası farkı saat cinsinden döndür
+    function diffHours(t1, t2) {
+      if (!t1 || !t2) return '';
+      const d1 = new Date(t1).getTime();
+      const d2 = new Date(t2).getTime();
+      if (!Number.isFinite(d1) || !Number.isFinite(d2)) return '';
+      const diff = (d2 - d1) / (1000 * 60 * 60);
+      return diff.toFixed(2);
+    }
+
     async function load() {
       const params = {
         symbol: $('#symbol').value.trim(),
@@ -113,14 +136,16 @@
       const data = await res.json();
 
       tbody.innerHTML = data.map(r => {
-        // ts zaten ISO formatında geliyor, doğrudan Date objesi yapabiliriz
-        const ts = r.ts ? new Date(r.ts) : null;
-        const tsStr = ts ? ts.toISOString().replace('T', ' ').replace('.000Z', '') : '';
+        const tsStr = fmtDate(r.ts);
+        const updStr = fmtDate(r.result_updated_at);
+        const duration = diffHours(r.ts, r.result_updated_at);
 
         return `
-            <tr>
+          <tr>
             <td>${r.id}</td>
             <td>${tsStr}</td>
+            <td>${updStr}</td>
+            <td>${duration}</td>
             <td>${r.symbol}</td>
             <td>${badgePos(r.position)}</td>
             <td>${fmt(r.entryprice)}</td>
@@ -131,11 +156,9 @@
             <td>${pct(r.tp2_pct)}</td>
             <td>${pct(r.sl_pct)}</td>
             <td>${badgeRes(r.result)}</td>
-            </tr>
+          </tr>
         `;
-        }).join('');
-
-
+      }).join('');
     }
 
     let timer = null;

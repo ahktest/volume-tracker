@@ -148,7 +148,7 @@ app.get('/api/signals', async (req, res) => {
 
     const sql = `
       SELECT
-        id, ts, symbol, position, entryprice, tp1, tp2, sl, result
+        id, ts, symbol, position, entryprice, tp1, tp2, sl, result, result_updated_at
       FROM signals_simple
       WHERE ${where}
       ORDER BY ts DESC
