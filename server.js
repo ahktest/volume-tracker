@@ -130,35 +130,37 @@ app.get('/api/signals', async (req, res) => {
     let where = '1=1';
 
     if (since_hours && Number(since_hours) > 0) {
-      where += ' AND ts >= (UTC_TIMESTAMP() - INTERVAL ? HOUR)';
+      where += ' AND ss.ts >= (UTC_TIMESTAMP() - INTERVAL ? HOUR)';
       params.push(Number(since_hours));
     }
     if (symbol) {
-      where += ' AND symbol = ?';
+      where += ' AND ss.symbol = ?';
       params.push(String(symbol).toUpperCase());
     }
     if (result) {
       if (result === 'null') {
-        where += ' AND result IS NULL';
+        where += ' AND ss.result IS NULL';
       } else {
-        where += ' AND result = ?';
+        where += ' AND ss.result = ?';
         params.push(result);
       }
     }
 
     const sql = `
       SELECT
-        id, ts, symbol, position, entryprice, tp1, tp2, sl, result, result_updated_at
-      FROM signals_simple
+        ss.id, ss.ts, ss.symbol, ss.position, ss.entryprice, ss.tp1, ss.tp2, ss.sl,
+        ss.result, ss.result_updated_at,
+        EXISTS(SELECT 1 FROM fut_trades ft WHERE ft.source_signal_id = ss.id) AS traded
+      FROM signals_simple ss
       WHERE ${where}
-      ORDER BY ts DESC
+      ORDER BY ss.ts DESC
       LIMIT ?
     `;
     params.push(Math.min(Number(limit) || 100, 1000));
 
     const [rows] = await pool.query(sql, params);
 
-    // yüzde farkları hesaplayıp ekleyelim (kullanışlı oluyor)
+    // yüzde farkları hesaplayıp ekleyelim + traded aynen geçir
     const withPct = rows.map(r => {
       const entry = Number(r.entryprice);
       const tp1 = Number(r.tp1);
@@ -169,6 +171,7 @@ app.get('/api/signals', async (req, res) => {
 
       return {
         ...r,
+        traded: !!r.traded, // 0/1 -> boolean
         tp1_pct: Number.isFinite(pct(tp1, entry)) ? Number(pct(tp1, entry).toFixed(2)) : null,
         tp2_pct: Number.isFinite(pct(tp2, entry)) ? Number(pct(tp2, entry).toFixed(2)) : null,
         sl_pct:  Number.isFinite(pct(sl,  entry)) ? Number(pct(sl,  entry).toFixed(2))  : null,

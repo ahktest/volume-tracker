@@ -5,22 +5,26 @@
   <title>Result Worker – Sinyal Sonuçları</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    :root { color-scheme: light dark; }
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, sans-serif; margin: 20px; }
-    h1 { margin-bottom: 8px; }
-    .bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:10px 0 16px; }
-    input, select, button { padding:8px 10px; font-size:14px; }
-    table { width:100%; border-collapse: collapse; }
-    th, td { padding:8px; border-bottom: 1px solid #4443; text-align:left; }
-    code.badge { padding:2px 6px; border-radius: 6px; font-size: 12px; }
-    .pos-long  { background:#0ea5e98f; }
-    .pos-short { background:#f871718f; }
-    .pos-none  { background:#9ca3af8f; }
-    .res-tp1 { background:#10b9818f; }
-    .res-tp2 { background:#22c55e8f; }
-    .res-sl  { background:#ef44448f; }
-    .res-timeout { background:#f59e0b8f; }
-  </style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, sans-serif; margin: 20px; }
+  h1 { margin-bottom: 8px; }
+  .bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:10px 0 16px; }
+  input, select, button { padding:8px 10px; font-size:14px; }
+  table { width:100%; border-collapse: collapse; }
+  th, td { padding:8px; border-bottom: 1px solid #4443; text-align:left; }
+  code.badge { padding:2px 6px; border-radius: 6px; font-size: 12px; }
+  .pos-long  { background:#0ea5e98f; }
+  .pos-short { background:#f871718f; }
+  .pos-none  { background:#9ca3af8f; }
+  .res-tp1 { background:#10b9818f; }
+  .res-tp2 { background:#22c55e8f; }
+  .res-sl  { background:#ef44448f; }
+  .res-timeout { background:#f59e0b8f; }
+
+  /* trade EDİLMEYEN sinyallerin satırı için hafif kırmızı vurgulama */
+  tr.not-traded td { background: #ef44441a; }         /* yarı saydam kırmızı */
+  tr.not-traded:hover td { background: #ef444433; }   /* hover’da biraz daha belirgin */
+</style>
 </head>
 <body>
   <h1>Result Worker – Sinyal Sonuçları</h1>
@@ -136,29 +140,31 @@
       const data = await res.json();
 
       tbody.innerHTML = data.map(r => {
-        const tsStr = fmtDate(r.ts);
-        const updStr = fmtDate(r.result_updated_at);
-        const duration = diffHours(r.ts, r.result_updated_at);
+  const tsStr  = fmtDate(r.ts);
+  const updStr = fmtDate(r.result_updated_at);
+  const duration = diffHours(r.ts, r.result_updated_at);
 
-        return `
-          <tr>
-            <td>${r.id}</td>
-            <td>${tsStr}</td>
-            <td>${updStr}</td>
-            <td>${duration}</td>
-            <td>${r.symbol}</td>
-            <td>${badgePos(r.position)}</td>
-            <td>${fmt(r.entryprice)}</td>
-            <td>${fmt(r.tp1)}</td>
-            <td>${fmt(r.tp2)}</td>
-            <td>${fmt(r.sl)}</td>
-            <td>${pct(r.tp1_pct)}</td>
-            <td>${pct(r.tp2_pct)}</td>
-            <td>${pct(r.sl_pct)}</td>
-            <td>${badgeRes(r.result)}</td>
-          </tr>
-        `;
-      }).join('');
+  const rowCls = r.traded ? '' : 'not-traded';
+
+  return `
+    <tr class="${rowCls}">
+      <td>${r.id}</td>
+      <td>${tsStr}</td>
+      <td>${updStr}</td>
+      <td>${duration}</td>
+      <td>${r.symbol}</td>
+      <td>${badgePos(r.position)}</td>
+      <td>${fmt(r.entryprice)}</td>
+      <td>${fmt(r.tp1)}</td>
+      <td>${fmt(r.tp2)}</td>
+      <td>${fmt(r.sl)}</td>
+      <td>${pct(r.tp1_pct)}</td>
+      <td>${pct(r.tp2_pct)}</td>
+      <td>${pct(r.sl_pct)}</td>
+      <td>${badgeRes(r.result)}</td>
+    </tr>
+  `;
+}).join('');
     }
 
     let timer = null;
