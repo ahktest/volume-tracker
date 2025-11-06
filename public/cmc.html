@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <title>CMC Analyze – ATH (1w)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { --bg:#0b0d12; --card:#141823; --muted:#8da2b5; --fg:#e8eef5; --acc:#5aa7ff; }
+    html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;}
+    .wrap{max-width:1100px;margin:32px auto;padding:0 16px;}
+    h1{font-weight:700;margin:0 0 12px}
+    .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+    input,select,button{
+      background:#0f1320;border:1px solid #243045;color:var(--fg);
+      padding:8px 10px;border-radius:8px;outline:none
+    }
+    button{cursor:pointer}
+    .card{background:var(--card);border:1px solid #242b3a;border-radius:14px;padding:12px}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:10px;border-bottom:1px solid #2a3244;vertical-align:middle}
+    th{color:var(--muted);font-weight:600;text-align:left}
+    tr:hover{background:#121829}
+    .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#0e1c33;color:#9cc0ff;border:1px solid #1b2b4a;font-size:12px}
+    .muted{color:var(--muted)}
+    .right{text-align:right}
+    .small{font-size:12px}
+    a{color:var(--acc);text-decoration:none}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>CMC Analyze — ATH (1w)</h1>
+  <div class="toolbar">
+    <input id="search" placeholder="Ara: BTC, btcusdt, bitcoin..." />
+    <select id="listing">
+      <option value="">Listing (hepsi)</option>
+      <option value="spot">spot</option>
+      <option value="alpha">alpha</option>
+      <option value="futures">futures</option>
+      <option value="spot-futures">spot-futures</option>
+    </select>
+    <select id="sort">
+      <option value="ath_price_usd">Sırala: ATH Fiyat</option>
+      <option value="ath_price_date">Sırala: ATH Tarih</option>
+      <option value="days_since_ath">Sırala: ATH’dan Gün</option>
+      <option value="launch_date">Sırala: Çıkış</option>
+      <option value="cmc_symbol">Sırala: Sembol</option>
+    </select>
+    <select id="order">
+      <option value="desc">Desc</option>
+      <option value="asc">Asc</option>
+    </select>
+    <select id="limit">
+      <option value="50">50</option>
+      <option value="100" selected>100</option>
+      <option value="200">200</option>
+      <option value="500">500</option>
+    </select>
+    <label class="small"><input type="checkbox" id="onlyPrice" /> Sadece ATH fiyatı olanlar</label>
+    <button id="load">Yükle</button>
+  </div>
+
+  <div class="card">
+    <table id="tbl">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Symbol</th>
+          <th>Slug</th>
+          <th>Listing</th>
+          <th>Binance</th>
+          <th class="right">ATH Fiyat (USD)</th>
+          <th>ATH Tarih (UTC)</th>
+          <th>ATH’dan Gün</th>
+          <th>Çıkış Tarihi</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"><tr><td colspan="9" class="muted">Veri bekleniyor…</td></tr></tbody>
+    </table>
+  </div>
+
+  <p class="small muted" style="margin-top:10px">
+    Kaynaklar: Binance 1w klines (ATH fiyat/tarih), CMC Info (çıkış).  
+    <a href="/api/cmc/ath">/api/cmc/ath</a>
+  </p>
+</div>
+
+<script>
+const $ = (s)=>document.querySelector(s);
+
+function fmtUSD(x){
+  if (x==null) return '—';
+  const n = Number(x);
+  if (!isFinite(n)) return '—';
+  return n.toLocaleString('en-US', { maximumFractionDigits: 8 });
+}
+function fmtDate(d){
+  return d ? String(d).replace('T',' ').replace('Z','') : '—';
+}
+
+async function load() {
+  const q = new URLSearchParams();
+  const listing = $('#listing').value.trim();
+  const search = $('#search').value.trim();
+  const sort = $('#sort').value;
+  const order = $('#order').value;
+  const limit = $('#limit').value;
+  const onlyPrice = $('#onlyPrice').checked;
+
+  if (listing) q.set('listing', listing);
+  if (search) q.set('search', search);
+  if (onlyPrice) q.set('has_ath_price','1');
+  q.set('sort', sort);
+  q.set('order', order);
+  q.set('limit', limit);
+
+  const url = '/api/cmc/ath?' + q.toString();
+
+  const tbody = $('#tbody');
+  tbody.innerHTML = `<tr><td colspan="9" class="muted">Yükleniyor…</td></tr>`;
+
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (!Array.isArray(data) || data.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="9" class="muted">Kayıt bulunamadı.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = '';
+    data.forEach((r, i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${i+1}</td>
+        <td><b>${r.cmc_symbol || ''}</b></td>
+        <td><a href="/api/cmc/${r.cmc_slug}" target="_blank">${r.cmc_slug || ''}</a></td>
+        <td><span class="pill">${r.binance_listing_type || ''}</span></td>
+        <td>${r.binance_symbol || ''}</td>
+        <td class="right">${fmtUSD(r.ath_price_usd)}</td>
+        <td>${fmtDate(r.ath_price_date)}</td>
+        <td>${r.days_since_ath ?? '—'}</td>
+        <td>${fmtDate(r.launch_date)}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="9" class="muted">Hata: ${e.message}</td></tr>`;
+  }
+}
+
+$('#load').addEventListener('click', load);
+window.addEventListener('DOMContentLoaded', load);
+</script>
+</body>
+</html>

@@ -186,6 +186,111 @@ app.get('/api/signals', async (req, res) => {
 });
 
 
+/** -------------------------------
+ *  CMC ANALYZE API
+ *  ------------------------------*/
+
+/**
+ * GET /api/cmc/ath
+ * Query:
+ *  - listing: 'spot' | 'alpha' | 'futures' | 'spot-futures' | ... (çoklu label içerir)
+ *  - has_ath_price: '1' sadece ath_price_usd dolu olanlar
+ *  - search: 'btc'  (symbol/slug/ binance_symbol içinde arar)
+ *  - sort: 'ath_price_usd' | 'ath_price_date' | 'days_since_ath' | 'launch_date'
+ *  - order: 'asc' | 'desc'
+ *  - limit: default 100 (max 500)
+ */
+app.get('/api/cmc/ath', async (req, res) => {
+  try {
+    const {
+      listing = '',            // içerir: 'futures' vs
+      has_ath_price = '',      // '1' olursa sadece fiyatı olanlar
+      search = '',
+      sort = 'ath_price_usd',
+      order = 'desc',
+      limit = '100',
+    } = req.query;
+
+    const params = [];
+    let where = '1=1';
+
+    if (listing) {
+      // varchar içinde arama: 'spot', 'alpha', 'futures' vb.
+      where += ' AND binance_listing_type LIKE ?';
+      params.push(`%${listing.toLowerCase()}%`);
+    }
+    if (has_ath_price === '1') {
+      where += ' AND ath_price_usd IS NOT NULL AND ath_price_date IS NOT NULL';
+    }
+    if (search) {
+      where += ' AND (cmc_symbol LIKE ? OR cmc_slug LIKE ? OR binance_symbol LIKE ?)';
+      params.push(`%${search.toUpperCase()}%`, `%${search.toLowerCase()}%`, `%${search.toUpperCase()}%`);
+    }
+
+    // güvenli sıralama (whitelist)
+    const SORT_ALLOW = new Set(['ath_price_usd', 'ath_price_date', 'days_since_ath', 'launch_date', 'cmc_symbol']);
+    const ORDER_ALLOW = new Set(['asc', 'desc']);
+    const sortCol = SORT_ALLOW.has(String(sort)) ? sort : 'ath_price_usd';
+    const sortOrd = ORDER_ALLOW.has(String(order).toLowerCase()) ? order : 'desc';
+    const lim = Math.min(Number(limit) || 100, 500);
+
+    const sql = `
+      SELECT
+        cmc_id, cmc_slug, cmc_symbol,
+        launch_date,
+        ath_price_usd, ath_price_date,
+        days_since_ath,
+        binance_listing_type, binance_symbol,
+        is_delist,
+        JSON_EXTRACT(COALESCE(meta,'{}'), '$.ath_price_source') AS ath_price_source
+      FROM cmc_analyze
+      WHERE ${where}
+      ORDER BY ${sortCol} ${sortOrd}
+      LIMIT ?
+    `;
+    params.push(lim);
+
+    const [rows] = await pool.query(sql, params);
+    res.json(rows);
+  } catch (err) {
+    console.error('[/api/cmc/ath] Hata:', err);
+    res.status(500).json({ error: 'Veri alınamadı' });
+  }
+});
+
+/**
+ * GET /api/cmc/:slug
+ * Tek coin detayı
+ */
+app.get('/api/cmc/:slug', async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const [rows] = await pool.query(
+      `
+      SELECT
+        cmc_id, cmc_slug, cmc_symbol,
+        launch_date,
+        ath_price_usd, ath_price_date,
+        days_since_ath,
+        binance_listing_type, binance_symbol,
+        is_delist,
+        meta,
+        fetched_at_utc
+      FROM cmc_analyze
+      WHERE cmc_slug = ?
+      LIMIT 1
+      `,
+      [slug]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Bulunamadı' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[/api/cmc/:slug] Hata:', err);
+    res.status(500).json({ error: 'Veri alınamadı' });
+  }
+});
+
+
 // Sunucu başlatma
 app.listen(PORT, () => {
   console.log(`Sunucu çalışıyor: http://localhost:${PORT}`);
