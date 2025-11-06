@@ -203,38 +203,35 @@ app.get('/api/signals', async (req, res) => {
 app.get('/api/cmc/ath', async (req, res) => {
   try {
     const {
-      listing = 'alpha-futures',   // 🔹 varsayılan filtre
-      has_ath_price = '',          // opsiyonel
+      listing = '',            // içerir: 'futures' vs
+      has_ath_price = '',      // '1' olursa sadece fiyatı olanlar
       search = '',
-      sort = 'ath_price_date',     // 🔹 varsayılan sıralama kolonu
-      order = 'asc',               // 🔹 varsayılan sıralama yönü
+      sort = 'ath_price_usd',
+      order = 'desc',
       limit = '100',
     } = req.query;
 
     const params = [];
     let where = '1=1';
 
-    // sadece "alpha-futures" içeren, "alpha-spot-futures" içermeyen kayıtlar
-    if (listing === 'alpha-futures') {
-      where += " AND binance_listing_type LIKE '%alpha-futures%' AND binance_listing_type NOT LIKE '%spot%'";
-    } else if (listing) {
+    if (listing) {
+      // varchar içinde arama: 'spot', 'alpha', 'futures' vb.
       where += ' AND binance_listing_type LIKE ?';
       params.push(`%${listing.toLowerCase()}%`);
     }
-
     if (has_ath_price === '1') {
       where += ' AND ath_price_usd IS NOT NULL AND ath_price_date IS NOT NULL';
     }
-
     if (search) {
       where += ' AND (cmc_symbol LIKE ? OR cmc_slug LIKE ? OR binance_symbol LIKE ?)';
       params.push(`%${search.toUpperCase()}%`, `%${search.toLowerCase()}%`, `%${search.toUpperCase()}%`);
     }
 
+    // güvenli sıralama (whitelist)
     const SORT_ALLOW = new Set(['ath_price_usd', 'ath_price_date', 'days_since_ath', 'launch_date', 'cmc_symbol']);
     const ORDER_ALLOW = new Set(['asc', 'desc']);
-    const sortCol = SORT_ALLOW.has(String(sort)) ? sort : 'ath_price_date';
-    const sortOrd = ORDER_ALLOW.has(String(order).toLowerCase()) ? order : 'asc';
+    const sortCol = SORT_ALLOW.has(String(sort)) ? sort : 'ath_price_usd';
+    const sortOrd = ORDER_ALLOW.has(String(order).toLowerCase()) ? order : 'desc';
     const lim = Math.min(Number(limit) || 100, 500);
 
     const sql = `
