@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <title>CMC Coin Detay</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { --bg:#0b0d12; --card:#141823; --muted:#8da2b5; --fg:#e8eef5; --acc:#5aa7ff; }
+    html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial}
+    .wrap{max-width:900px;margin:28px auto;padding:0 16px}
+    a{color:var(--acc);text-decoration:none}
+    .card{background:var(--card);border:1px solid #242b3a;border-radius:14px;padding:16px}
+    .grid{display:grid;grid-template-columns:160px 1fr;gap:8px 14px}
+    .muted{color:var(--muted)}
+    .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#0e1c33;color:#9cc0ff;border:1px solid #1b2b4a;font-size:12px}
+    .row{display:flex;gap:8px;align-items:center}
+    input,button{background:#0f1320;border:1px solid #243045;color:var(--fg);padding:8px 10px;border-radius:8px}
+    button{cursor:pointer}
+    .toolbar{display:flex;gap:8px;margin:0 0 12px}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="toolbar">
+    <input id="slugInput" placeholder="slug: bitcoin" />
+    <button id="go">Yükle</button>
+    <a href="/cmc.html">← Listeye dön</a>
+  </div>
+
+  <h1 id="title">Coin Detay</h1>
+
+  <div class="card">
+    <div class="grid">
+      <div class="muted">Sembol</div><div id="sym">—</div>
+      <div class="muted">Slug</div><div id="slug">—</div>
+      <div class="muted">Listing</div><div id="listing">—</div>
+      <div class="muted">Binance</div><div id="binance">—</div>
+      <div class="muted">ATH Fiyat (USD)</div><div id="athp">—</div>
+      <div class="muted">ATH Tarih (UTC)</div><div id="atht">—</div>
+      <div class="muted">ATH’dan Gün (Bugün)</div><div id="days">—</div>
+      <div class="muted">Çıkış (CMC date_added)</div><div id="launch">—</div>
+      <div class="muted">Delist</div><div id="delist">—</div>
+      <div class="muted">Meta</div><div id="meta" class="muted small">—</div>
+      <div class="muted">Son Güncelleme</div><div id="fetched">—</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (s)=>document.querySelector(s);
+function qs(name){return new URLSearchParams(location.search).get(name)||'';}
+function fmtUSD(x){ if (x==null) return '—'; const n=Number(x); return isFinite(n)? n.toLocaleString('en-US',{maximumFractionDigits:8}) : '—'; }
+function fmtDate(d){ return d ? String(d).replace('T',' ').replace('Z','') : '—'; }
+function daysSince(dateStr){
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  if (isNaN(d)) return '—';
+  const now = new Date();
+  const diff = Math.floor((now - d) / (1000*60*60*24));
+  return diff >= 0 ? diff : 0;
+}
+
+async function loadSlug(slug){
+  if (!slug) return;
+  $('#slugInput').value = slug;
+  $('#title').textContent = `Coin Detay — ${slug}`;
+
+  const res = await fetch(`/api/cmc/${encodeURIComponent(slug)}`);
+  if (!res.ok){
+    alert('Kayıt bulunamadı'); return;
+  }
+  const r = await res.json();
+
+  $('#sym').textContent = r.cmc_symbol || '—';
+  $('#slug').textContent = r.cmc_slug || '—';
+  $('#listing').innerHTML = r.binance_listing_type ? `<span class="pill">${r.binance_listing_type}</span>` : '—';
+  $('#binance').textContent = r.binance_symbol || '—';
+  $('#athp').textContent = fmtUSD(r.ath_price_usd);
+  $('#atht').textContent = fmtDate(r.ath_price_date);
+  $('#days').textContent = daysSince(r.ath_price_date);        // ← BUGÜNE göre hesap
+  $('#launch').textContent = fmtDate(r.launch_date);
+  $('#delist').textContent = Number(r.is_delist) ? 'Evet' : 'Hayır';
+  $('#meta').textContent = r.meta || '—';
+  $('#fetched').textContent = fmtDate(r.fetched_at_utc);
+}
+
+$('#go').addEventListener('click', ()=> loadSlug($('#slugInput').value.trim()));
+window.addEventListener('DOMContentLoaded', ()=> {
+  const s = qs('slug');
+  if (s) loadSlug(s);
+});
+</script>
+</body>
+</html>

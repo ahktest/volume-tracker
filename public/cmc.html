@@ -97,6 +97,14 @@ function fmtUSD(x){
 function fmtDate(d){
   return d ? String(d).replace('T',' ').replace('Z','') : '—';
 }
+function daysSince(dateStr){            // ← BUGÜNE GÖRE gün hesabı
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  if (isNaN(d)) return '—';
+  const now = new Date();
+  const diff = Math.floor((now - d) / (1000*60*60*24));
+  return diff >= 0 ? diff : 0;
+}
 
 async function load() {
   const q = new URLSearchParams();
@@ -130,16 +138,17 @@ async function load() {
 
     tbody.innerHTML = '';
     data.forEach((r, i) => {
+      const dsAth = daysSince(r.ath_price_date);   // ← server’dan gelen değere güvenmeyip bugünden hesapla
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>${i+1}</td>
         <td><b>${r.cmc_symbol || ''}</b></td>
-        <td><a href="/api/cmc/${r.cmc_slug}" target="_blank">${r.cmc_slug || ''}</a></td>
+        <td><a href="/cmc-coin.html?slug=${encodeURIComponent(r.cmc_slug)}">${r.cmc_slug || ''}</a></td>
         <td><span class="pill">${r.binance_listing_type || ''}</span></td>
         <td>${r.binance_symbol || ''}</td>
         <td class="right">${fmtUSD(r.ath_price_usd)}</td>
         <td>${fmtDate(r.ath_price_date)}</td>
-        <td>${r.days_since_ath ?? '—'}</td>
+        <td>${dsAth}</td>
         <td>${fmtDate(r.launch_date)}</td>
       `;
       tbody.appendChild(tr);
