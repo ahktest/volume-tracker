@@ -2,186 +2,138 @@
 <html lang="tr">
 <head>
   <meta charset="utf-8" />
-  <title>Result Worker – Sinyal Sonuçları</title>
+  <title>Futures PNL Dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-  :root { color-scheme: light dark; }
-  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, sans-serif; margin: 20px; }
-  h1 { margin-bottom: 8px; }
-  .bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:10px 0 16px; }
-  input, select, button { padding:8px 10px; font-size:14px; }
-  table { width:100%; border-collapse: collapse; }
-  th, td { padding:8px; border-bottom: 1px solid #4443; text-align:left; }
-  code.badge { padding:2px 6px; border-radius: 6px; font-size: 12px; }
-  .pos-long  { background:#0ea5e98f; }
-  .pos-short { background:#f871718f; }
-  .pos-none  { background:#9ca3af8f; }
-  .res-tp1 { background:#10b9818f; }
-  .res-tp2 { background:#22c55e8f; }
-  .res-sl  { background:#ef44448f; }
-  .res-timeout { background:#f59e0b8f; }
 
-  /* trade EDİLMEYEN sinyallerin satırı için hafif kırmızı vurgulama */
-  tr.not-traded td { background: #ef44441a; }         /* yarı saydam kırmızı */
-  tr.not-traded:hover td { background: #ef444433; }   /* hover’da biraz daha belirgin */
-</style>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      margin: 24px;
+      max-width: 1100px;
+    }
+
+    h1 { margin-bottom: 4px; }
+    .sub { opacity: 0.7; margin-bottom: 24px; }
+
+    .pnl-box {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-radius: 12px;
+      background: #10b9811a;
+      margin-bottom: 24px;
+    }
+
+    .pnl-box .label {
+      font-size: 14px;
+      opacity: 0.7;
+    }
+
+    .pnl-box .value {
+      font-size: 32px;
+      font-weight: 700;
+    }
+
+    .pnl-positive { color: #10b981; }
+    .pnl-negative { color: #ef4444; }
+
+    canvas {
+      width: 100% !important;
+      height: 420px !important;
+    }
+  </style>
 </head>
 <body>
-  <h1>Result Worker – Sinyal Sonuçları</h1>
 
-  <div class="bar">
-    <input id="symbol" placeholder="Symbol (örn. BIDUSDT)" />
-    <select id="result">
-      <option value="">Sonuç (hepsi)</option>
-      <option value="null">result IS NULL</option>
-      <option value="tp1">tp1</option>
-      <option value="tp2">tp2</option>
-      <option value="sl">sl</option>
-      <option value="timeout">timeout</option>
-    </select>
-    <select id="since">
-      <option value="24">Son 24 saat</option>
-      <option value="48">Son 48 saat</option>
-      <option value="72" selected>Son 72 saat</option>
-      <option value="168">Son 7 gün</option>
-      <option value="720">Son 30 gün</option>
-    </select>
-    <select id="limit">
-      <option value="50">50</option>
-      <option value="100" selected>100</option>
-      <option value="200">200</option>
-      <option value="500">500</option>
-    </select>
-    <button id="load">Yükle</button>
-    <button id="refresh">Oto-Yenile: Kapalı</button>
+  <h1>Futures PNL</h1>
+  <div class="sub">Kapanan pozisyonlara göre toplam performans</div>
+
+  <div class="pnl-box">
+    <div>
+      <div class="label">Toplam PNL</div>
+      <div id="totalPnl" class="value">—</div>
+    </div>
   </div>
 
-  <table id="tbl">
-    <thead>
-      <tr>
-        <th>ID</th>
-        <th>Oluşturma (UTC)</th>
-        <th>Güncelleme (UTC)</th>
-        <th>Süre (h)</th>
-        <th>Symbol</th>
-        <th>Pos</th>
-        <th>Entry</th>
-        <th>TP1</th>
-        <th>TP2</th>
-        <th>SL</th>
-        <th>TP1%</th>
-        <th>TP2%</th>
-        <th>SL%</th>
-        <th>Result</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
+  <canvas id="pnlChart"></canvas>
+
+  <div class="pnl-box" style="margin-top:12px">
+  <div>
+    <div class="label">Win / Loss</div>
+    <div id="wlText" class="value">—</div>
+  </div>
+</div>
 
   <script>
-    const $ = sel => document.querySelector(sel);
-    const tbody = $('#tbl tbody');
-    const qs = o => Object.entries(o)
-      .filter(([,v]) => v!=='' && v!=null)
-      .map(([k,v]) => k+'='+encodeURIComponent(v))
-      .join('&');
+    const totalEl = document.getElementById('totalPnl');
+    const ctx = document.getElementById('pnlChart').getContext('2d');
 
-    function badgePos(p) {
-      const cls = p==='long' ? 'pos-long' : p==='short' ? 'pos-short' : 'pos-none';
-      return `<code class="badge ${cls}">${p}</code>`;
-    }
-    function badgeRes(r) {
-      if (!r) return '';
-      const m = { tp1:'res-tp1', tp2:'res-tp2', sl:'res-sl', timeout:'res-timeout' };
-      return `<code class="badge ${m[r]||''}">${r}</code>`;
-    }
-    function fmt(n) {
-      if (n===null || n===undefined) return '';
-      const num = Number(n);
-      if (!Number.isFinite(num)) return '';
-      if (Math.abs(num) >= 1) return num.toFixed(6);
-      return num.toFixed(8);
-    }
-    function pct(n) {
-      if (n===null || n===undefined) return '';
-      const num = Number(n);
-      if (!Number.isFinite(num)) return '';
-      const sign = num>0?'+':'';
-      return sign + num.toFixed(2) + '%';
-    }
+    let chart;
 
-    // tarih biçimlendirici (UTC)
-    function fmtDate(d) {
-      if (!d) return '';
-      const dt = new Date(d);
-      if (isNaN(dt)) return '';
-      return dt.toISOString().replace('T', ' ').replace('.000Z', '');
-    }
+    async function loadPNL() {
+  const res = await fetch('/api/futures-pnl');
+  const data = await res.json();
 
-    // iki tarih arası farkı saat cinsinden döndür
-    function diffHours(t1, t2) {
-      if (!t1 || !t2) return '';
-      const d1 = new Date(t1).getTime();
-      const d2 = new Date(t2).getTime();
-      if (!Number.isFinite(d1) || !Number.isFinite(d2)) return '';
-      const diff = (d2 - d1) / (1000 * 60 * 60);
-      return diff.toFixed(2);
-    }
+  const rows = data.daily || [];
+  const stats = data.stats || {};
 
-    async function load() {
-      const params = {
-        symbol: $('#symbol').value.trim(),
-        result: $('#result').value,
-        since_hours: $('#since').value,
-        limit: $('#limit').value
-      };
-      const url = '/api/signals?' + qs(params);
-      const res = await fetch(url);
-      const data = await res.json();
+  if (!rows.length) {
+    totalEl.textContent = '0.00';
+    return;
+  }
 
-      tbody.innerHTML = data.map(r => {
-  const tsStr  = fmtDate(r.ts);
-  const updStr = fmtDate(r.result_updated_at);
-  const duration = diffHours(r.ts, r.result_updated_at);
+  const labels = [];
+  let total = 0;
+  const cumulative = [];
 
-  const rowCls = r.traded ? '' : 'not-traded';
+  for (const r of rows) {
+    labels.push(r.date);
+    total += Number(r.pnl);
+    cumulative.push(total);
+  }
 
-  return `
-    <tr class="${rowCls}">
-      <td>${r.id}</td>
-      <td>${tsStr}</td>
-      <td>${updStr}</td>
-      <td>${duration}</td>
-      <td>${r.symbol}</td>
-      <td>${badgePos(r.position)}</td>
-      <td>${fmt(r.entryprice)}</td>
-      <td>${fmt(r.tp1)}</td>
-      <td>${fmt(r.tp2)}</td>
-      <td>${fmt(r.sl)}</td>
-      <td>${pct(r.tp1_pct)}</td>
-      <td>${pct(r.tp2_pct)}</td>
-      <td>${pct(r.sl_pct)}</td>
-      <td>${badgeRes(r.result)}</td>
-    </tr>
-  `;
-}).join('');
-    }
+  totalEl.textContent = total.toFixed(4);
+  totalEl.className = 'value ' + (total >= 0 ? 'pnl-positive' : 'pnl-negative');
 
-    let timer = null;
-    $('#load').addEventListener('click', load);
-    $('#refresh').addEventListener('click', () => {
-      if (timer) {
-        clearInterval(timer);
-        timer = null;
-        $('#refresh').textContent = 'Oto-Yenile: Kapalı';
-      } else {
-        timer = setInterval(load, 5000);
-        $('#refresh').textContent = 'Oto-Yenile: 5 sn';
+  const wlEl = document.getElementById('wlText');
+  if (stats.total > 0) {
+    wlEl.textContent =
+      `${stats.wins}W / ${stats.losses}L  (${stats.winRate}%)`;
+  } else {
+    wlEl.textContent = '—';
+  }
+
+  if (chart) chart.destroy();
+
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Toplam PNL',
+        data: cumulative,
+        borderWidth: 2,
+        borderColor: '#10b981',
+        tension: 0.25,
+        pointRadius: 2,
+      }]
+    },
+    options: {
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { title: { display: true, text: 'Tarih' } },
+        y: { title: { display: true, text: 'PNL' } }
       }
-    });
+    }
+  });
+}
 
-    // sayfa açılışında yükle
-    load();
+    loadPNL();
   </script>
 </body>
 </html>

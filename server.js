@@ -117,71 +117,66 @@ app.get('/coin/:slug/history', async (req, res) => {
 });
 
 
-app.get('/api/signals', async (req, res) => {
+app.get('/api/futures-pnl', async (req, res) => {
   try {
     const {
-      symbol,
-      result,
-      since_hours = '72',
-      limit = '100',
+      since_days = '30',
     } = req.query;
 
     const params = [];
-    let where = '1=1';
+    let where = "status = 'CLOSED' AND pnl IS NOT NULL";
 
-    if (since_hours && Number(since_hours) > 0) {
-      where += ' AND ss.ts >= (UTC_TIMESTAMP() - INTERVAL ? HOUR)';
-      params.push(Number(since_hours));
-    }
-    if (symbol) {
-      where += ' AND ss.symbol = ?';
-      params.push(String(symbol).toUpperCase());
-    }
-    if (result) {
-      if (result === 'null') {
-        where += ' AND ss.result IS NULL';
-      } else {
-        where += ' AND ss.result = ?';
-        params.push(result);
-      }
+    if (since_days && Number(since_days) > 0) {
+      where += ' AND date2 >= (UTC_TIMESTAMP() - INTERVAL ? DAY)';
+      params.push(Number(since_days));
     }
 
-    const sql = `
+    // 🔹 Günlük PNL
+    const dailySql = `
       SELECT
-        ss.id, ss.ts, ss.symbol, ss.position, ss.entryprice, ss.tp1, ss.tp2, ss.sl,
-        ss.result, ss.result_updated_at,
-        EXISTS(SELECT 1 FROM fut_trades ft WHERE ft.source_signal_id = ss.id) AS traded
-      FROM signals_simple ss
+        DATE(date2) AS date,
+        SUM(pnl)    AS pnl
+      FROM futures_positions
       WHERE ${where}
-      ORDER BY ss.ts DESC
-      LIMIT ?
+      GROUP BY DATE(date2)
+      ORDER BY DATE(date2) ASC
     `;
-    params.push(Math.min(Number(limit) || 100, 1000));
 
-    const [rows] = await pool.query(sql, params);
+    // 🔹 Win / Loss
+    const wlSql = `
+      SELECT
+        SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END) AS wins,
+        SUM(CASE WHEN pnl <= 0 THEN 1 ELSE 0 END) AS losses,
+        COUNT(*) AS total
+      FROM futures_positions
+      WHERE ${where}
+    `;
 
-    // yüzde farkları hesaplayıp ekleyelim + traded aynen geçir
-    const withPct = rows.map(r => {
-      const entry = Number(r.entryprice);
-      const tp1 = Number(r.tp1);
-      const tp2 = Number(r.tp2);
-      const sl  = Number(r.sl);
+    const [dailyRows] = await pool.query(dailySql, params);
+    const [[wl]] = await pool.query(wlSql, params);
 
-      const pct = (a,b)=> (Number.isFinite(a)&&Number.isFinite(b)&&b!==0)?(((a-b)/b)*100):null;
+    const daily = dailyRows.map(r => ({
+      date: r.date,
+      pnl: Number(r.pnl),
+    }));
 
-      return {
-        ...r,
-        traded: !!r.traded, // 0/1 -> boolean
-        tp1_pct: Number.isFinite(pct(tp1, entry)) ? Number(pct(tp1, entry).toFixed(2)) : null,
-        tp2_pct: Number.isFinite(pct(tp2, entry)) ? Number(pct(tp2, entry).toFixed(2)) : null,
-        sl_pct:  Number.isFinite(pct(sl,  entry)) ? Number(pct(sl,  entry).toFixed(2))  : null,
-      };
+    const wins   = Number(wl.wins || 0);
+    const losses = Number(wl.losses || 0);
+    const total  = Number(wl.total || 0);
+    const winRate = total > 0 ? (wins / total) * 100 : 0;
+
+    res.json({
+      daily,
+      stats: {
+        wins,
+        losses,
+        total,
+        winRate: Number(winRate.toFixed(2)),
+      },
     });
-
-    res.json(withPct);
   } catch (err) {
-    console.error('[/api/signals] Hata:', err);
-    res.status(500).json({ error: 'Veri alınamadı' });
+    console.error('[/api/futures-pnl] Hata:', err);
+    res.status(500).json({ error: 'PNL verisi alınamadı' });
   }
 });
 
