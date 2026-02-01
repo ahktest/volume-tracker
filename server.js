@@ -117,37 +117,62 @@ app.get('/coin/:slug/history', async (req, res) => {
 });
 
 
-app.get('/api/futures-pnl', async (req, res) => {
+// ✅ Basit güvenlik: dashboard API'leri için header key kontrolü
+const DASH_KEY = "ahktest";
+function requireDashKey(req, res, next) {
+  const k = req.headers['x-dash-key'];
+  if (k !== DASH_KEY) return res.status(401).json({ error: "Unauthorized" });
+  next();
+}
+
+app.get("/ping", (req, res) => res.send("pong"));
+
+/**
+ * helpers: where builder (since_days)
+ */
+function buildWhereSinceDays(since_days) {
+  const params = [];
+  let where = "status = 'CLOSED' AND pnl IS NOT NULL AND date2 IS NOT NULL";
+
+  const n = Number(since_days);
+  if (!Number.isNaN(n) && n > 0) {
+    where += " AND date2 >= (UTC_TIMESTAMP() - INTERVAL ? DAY)";
+    params.push(n);
+  }
+
+  return { where, params };
+}
+
+/**
+ * GET /api/futures-pnl?since_days=30
+ * daily pnl + stats (win/loss)
+ * pnl formula: pnl - funding_fee - commission
+ */
+app.get('/api/futures-pnl', requireDashKey, async (req, res) => {
   try {
-    const {
-      since_days = '30',
-    } = req.query;
+    const { since_days = '30' } = req.query;
+    const { where, params } = buildWhereSinceDays(since_days);
 
-    const params = [];
-    let where = "status = 'CLOSED' AND pnl IS NOT NULL";
-
-    if (since_days && Number(since_days) > 0) {
-      where += ' AND date2 >= (UTC_TIMESTAMP() - INTERVAL ? DAY)';
-      params.push(Number(since_days));
-    }
-
-    // 🔹 Günlük PNL
     const dailySql = `
       SELECT
         DATE(date2) AS date,
-        SUM(pnl)    AS pnl
+        SUM(
+          pnl
+          - IFNULL(funding_fee, 0)
+          - IFNULL(commission, 0)
+        ) AS pnl
       FROM futures_positions
       WHERE ${where}
       GROUP BY DATE(date2)
       ORDER BY DATE(date2) ASC
     `;
 
-    // 🔹 Win / Loss
     const wlSql = `
       SELECT
-        SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END) AS wins,
-        SUM(CASE WHEN pnl <= 0 THEN 1 ELSE 0 END) AS losses,
-        COUNT(*) AS total
+        SUM(CASE WHEN (pnl - IFNULL(funding_fee,0) - IFNULL(commission,0)) > 0 THEN 1 ELSE 0 END) AS wins,
+        SUM(CASE WHEN (pnl - IFNULL(funding_fee,0) - IFNULL(commission,0)) < 0 THEN 1 ELSE 0 END) AS losses,
+        COUNT(*) AS total,
+        SUM(pnl - IFNULL(funding_fee,0) - IFNULL(commission,0)) AS totalPnl
       FROM futures_positions
       WHERE ${where}
     `;
@@ -157,12 +182,13 @@ app.get('/api/futures-pnl', async (req, res) => {
 
     const daily = dailyRows.map(r => ({
       date: r.date,
-      pnl: Number(r.pnl),
+      pnl: Number(r.pnl || 0),
     }));
 
     const wins   = Number(wl.wins || 0);
     const losses = Number(wl.losses || 0);
     const total  = Number(wl.total || 0);
+    const totalPnl = Number(wl.totalPnl || 0);
     const winRate = total > 0 ? (wins / total) * 100 : 0;
 
     res.json({
@@ -171,12 +197,172 @@ app.get('/api/futures-pnl', async (req, res) => {
         wins,
         losses,
         total,
+        totalPnl: Number(totalPnl.toFixed(8)),
         winRate: Number(winRate.toFixed(2)),
       },
     });
   } catch (err) {
     console.error('[/api/futures-pnl] Hata:', err);
     res.status(500).json({ error: 'PNL verisi alınamadı' });
+  }
+});
+
+/**
+ * GET /api/futures-summary?since_days=30
+ * source=normal vs funding ayrı özet:
+ * wins, losses, winRate, pnl
+ */
+app.get('/api/futures-summary', requireDashKey, async (req, res) => {
+  try {
+    const { since_days = '30' } = req.query;
+    const { where, params } = buildWhereSinceDays(since_days);
+
+    const sql = `
+      SELECT
+        source,
+        SUM(CASE WHEN (pnl - IFNULL(funding_fee,0) - IFNULL(commission,0)) > 0 THEN 1 ELSE 0 END) AS wins,
+        SUM(CASE WHEN (pnl - IFNULL(funding_fee,0) - IFNULL(commission,0)) < 0 THEN 1 ELSE 0 END) AS losses,
+        COUNT(*) AS total,
+        SUM(pnl - IFNULL(funding_fee,0) - IFNULL(commission,0)) AS pnl
+      FROM futures_positions
+      WHERE ${where}
+      GROUP BY source
+    `;
+
+    const [rows] = await pool.query(sql, params);
+
+    const bySource = {};
+    for (const r of rows) {
+      const wins = Number(r.wins || 0);
+      const losses = Number(r.losses || 0);
+      const total = Number(r.total || 0);
+      const pnl = Number(r.pnl || 0);
+      const winRate = total > 0 ? (wins / total) * 100 : 0;
+
+      bySource[r.source] = {
+        wins,
+        losses,
+        total,
+        pnl: Number(pnl.toFixed(8)),
+        winRate: Number(winRate.toFixed(2)),
+      };
+    }
+
+    // kaynak yoksa default objeler
+    if (!bySource.normal) bySource.normal = { wins:0, losses:0, total:0, pnl:0, winRate:0 };
+    if (!bySource.funding) bySource.funding = { wins:0, losses:0, total:0, pnl:0, winRate:0 };
+
+    res.json({ bySource });
+  } catch (err) {
+    console.error('[/api/futures-summary] Hata:', err);
+    res.status(500).json({ error: 'Veri alınamadı' });
+  }
+});
+
+/**
+ * GET /api/futures-daily?limit=14
+ * Günlük W/L + PNL (son N gün, DESC)
+ */
+app.get('/api/futures-daily', requireDashKey, async (req, res) => {
+  try {
+    const limit = Math.min(Number(req.query.limit || 14) || 14, 60);
+
+    const sql = `
+      SELECT
+        DATE(date2) AS date,
+        SUM(CASE WHEN (pnl - IFNULL(funding_fee,0) - IFNULL(commission,0)) > 0 THEN 1 ELSE 0 END) AS wins,
+        SUM(CASE WHEN (pnl - IFNULL(funding_fee,0) - IFNULL(commission,0)) < 0 THEN 1 ELSE 0 END) AS losses,
+        SUM(pnl - IFNULL(funding_fee,0) - IFNULL(commission,0)) AS pnl
+      FROM futures_positions
+      WHERE status='CLOSED' AND pnl IS NOT NULL AND date2 IS NOT NULL
+      GROUP BY DATE(date2)
+      ORDER BY DATE(date2) DESC
+      LIMIT ?
+    `;
+
+    const [rows] = await pool.query(sql, [limit]);
+    res.json(rows.map(r => ({
+      date: r.date,
+      wins: Number(r.wins || 0),
+      losses: Number(r.losses || 0),
+      pnl: Number(r.pnl || 0),
+    })));
+  } catch (err) {
+    console.error('[/api/futures-daily] Hata:', err);
+    res.status(500).json({ error: 'Veri alınamadı' });
+  }
+});
+
+/**
+ * GET /api/futures-balance-changes
+ * total_futures_balance değişimi:
+ * - 7d / 30d / YTD
+ *
+ * Not: total_futures_balance "CLOSED" satırlarda dolu olmalı.
+ */
+app.get('/api/futures-balance-changes', requireDashKey, async (req, res) => {
+  try {
+    const sql = `
+      SELECT
+        (
+          (SELECT total_futures_balance
+           FROM futures_positions
+           WHERE status='CLOSED' AND total_futures_balance IS NOT NULL
+             AND date2 >= UTC_TIMESTAMP() - INTERVAL 7 DAY
+           ORDER BY date2 DESC
+           LIMIT 1)
+          -
+          (SELECT total_futures_balance
+           FROM futures_positions
+           WHERE status='CLOSED' AND total_futures_balance IS NOT NULL
+             AND date2 >= UTC_TIMESTAMP() - INTERVAL 7 DAY
+           ORDER BY date2 ASC
+           LIMIT 1)
+        ) AS diff_7d,
+
+        (
+          (SELECT total_futures_balance
+           FROM futures_positions
+           WHERE status='CLOSED' AND total_futures_balance IS NOT NULL
+             AND date2 >= UTC_TIMESTAMP() - INTERVAL 30 DAY
+           ORDER BY date2 DESC
+           LIMIT 1)
+          -
+          (SELECT total_futures_balance
+           FROM futures_positions
+           WHERE status='CLOSED' AND total_futures_balance IS NOT NULL
+             AND date2 >= UTC_TIMESTAMP() - INTERVAL 30 DAY
+           ORDER BY date2 ASC
+           LIMIT 1)
+        ) AS diff_30d,
+
+        (
+          (SELECT total_futures_balance
+           FROM futures_positions
+           WHERE status='CLOSED' AND total_futures_balance IS NOT NULL
+             AND YEAR(date2) = YEAR(UTC_TIMESTAMP())
+           ORDER BY date2 DESC
+           LIMIT 1)
+          -
+          (SELECT total_futures_balance
+           FROM futures_positions
+           WHERE status='CLOSED' AND total_futures_balance IS NOT NULL
+             AND YEAR(date2) = YEAR(UTC_TIMESTAMP())
+           ORDER BY date2 ASC
+           LIMIT 1)
+        ) AS diff_ytd
+    `;
+
+    const [[row]] = await pool.query(sql);
+
+    res.json({
+      diff_7d: Number(row.diff_7d || 0),
+      diff_30d: Number(row.diff_30d || 0),
+      diff_ytd: Number(row.diff_ytd || 0),
+    });
+  } catch (err) {
+    console.error('[/api/futures-balance-changes] Hata:', err);
+    res.status(500).json({ error: 'Veri alınamadı' });
   }
 });
 

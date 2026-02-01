@@ -10,130 +10,444 @@
 
   <style>
     :root { color-scheme: light dark; }
-    body {
+
+    body{
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      margin: 24px;
-      max-width: 1100px;
+      margin: 0;
+      padding: 16px;
+      background: Canvas;
+      color: CanvasText;
     }
 
-    h1 { margin-bottom: 4px; }
-    .sub { opacity: 0.7; margin-bottom: 24px; }
+    .container{
+      max-width: 1200px;
+      margin: 0 auto;
+    }
 
-    .pnl-box {
+    h1{
+      margin: 0 0 6px 0;
+      font-size: 22px;
+      letter-spacing: .2px;
+    }
+
+    .sub{
+      opacity: .7;
+      margin-bottom: 16px;
+      font-size: 13px;
+    }
+
+    .topbar{
       display: flex;
+      gap: 12px;
       align-items: center;
       justify-content: space-between;
-      padding: 16px 20px;
-      border-radius: 12px;
-      background: #10b9811a;
-      margin-bottom: 24px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
     }
 
-    .pnl-box .label {
+    .filters{
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    select, button{
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid color-mix(in oklab, CanvasText 16%, transparent);
+      background: color-mix(in oklab, Canvas 92%, CanvasText 8%);
+      color: CanvasText;
       font-size: 14px;
-      opacity: 0.7;
+      outline: none;
+    }
+    button{ cursor: pointer; }
+
+    .grid{
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+    @media (min-width: 900px){
+      .grid-2{
+        grid-template-columns: 1fr 1fr;
+      }
     }
 
-    .pnl-box .value {
-      font-size: 32px;
-      font-weight: 700;
+    .card{
+      border-radius: 14px;
+      border: 1px solid color-mix(in oklab, CanvasText 12%, transparent);
+      background: color-mix(in oklab, Canvas 95%, CanvasText 5%);
+      padding: 14px;
     }
 
-    .pnl-positive { color: #10b981; }
-    .pnl-negative { color: #ef4444; }
+    .card h2{
+      margin: 0 0 10px 0;
+      font-size: 15px;
+      opacity: .85;
+    }
 
-    canvas {
+    .kpiRow{
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+    @media (min-width: 650px){
+      .kpiRow{
+        grid-template-columns: 1fr 1fr 1fr;
+      }
+    }
+
+    .kpi{
+      border-radius: 12px;
+      border: 1px solid color-mix(in oklab, CanvasText 10%, transparent);
+      background: color-mix(in oklab, Canvas 93%, CanvasText 7%);
+      padding: 12px;
+    }
+    .kpi .label{
+      font-size: 12px;
+      opacity: .7;
+      margin-bottom: 6px;
+    }
+    .kpi .value{
+      font-size: 22px;
+      font-weight: 750;
+      letter-spacing: .2px;
+    }
+    .pos{ color: #10b981; }
+    .neg{ color: #ef4444; }
+
+    .chartWrap{
+      height: 420px;
+    }
+    canvas{
       width: 100% !important;
-      height: 420px !important;
+      height: 100% !important;
+    }
+
+    .tableWrap{
+      overflow: auto;
+      border-radius: 12px;
+      border: 1px solid color-mix(in oklab, CanvasText 10%, transparent);
+    }
+
+    table{
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 520px;
+      background: color-mix(in oklab, Canvas 96%, CanvasText 4%);
+    }
+    thead th{
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: color-mix(in oklab, Canvas 90%, CanvasText 10%);
+      text-align: left;
+      font-size: 12px;
+      padding: 10px;
+      opacity: .85;
+      border-bottom: 1px solid color-mix(in oklab, CanvasText 14%, transparent);
+      white-space: nowrap;
+    }
+    tbody td{
+      padding: 10px;
+      border-bottom: 1px solid color-mix(in oklab, CanvasText 8%, transparent);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .muted{ opacity: .7; }
+    .pill{
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border-radius: 999px;
+      padding: 8px 12px;
+      border: 1px solid color-mix(in oklab, CanvasText 14%, transparent);
+      background: color-mix(in oklab, Canvas 92%, CanvasText 8%);
+      font-size: 13px;
     }
   </style>
 </head>
 <body>
 
-  <h1>Futures PNL</h1>
-  <div class="sub">Kapanan pozisyonlara göre toplam performans - 26 ocak Pazartesi 17.00</div>
+<script>
+  // ✅ Basit giriş (ahktest)
+  const DASH_KEY = prompt("Erişim anahtarı:");
+  if (DASH_KEY !== "ahktest") {
+    document.body.innerHTML = "<div style='padding:24px;font-family:system-ui'><h2>Erişim reddedildi</h2><div class='muted'>Anahtar hatalı.</div></div>";
+    throw new Error("Unauthorized");
+  }
+</script>
 
-  <div class="pnl-box">
+<div class="container">
+  <div class="topbar">
     <div>
-      <div class="label">Toplam PNL</div>
-      <div id="totalPnl" class="value">—</div>
+      <h1>Futures PNL</h1>
+      <div class="sub" id="subtitle">Kapanan pozisyonlara göre performans</div>
+    </div>
+
+    <div class="filters">
+      <span class="pill">
+        Range:
+        <select id="sinceDays">
+          <option value="7">7 gün</option>
+          <option value="30" selected>30 gün</option>
+          <option value="90">90 gün</option>
+          <option value="365">365 gün</option>
+          <option value="0">tümü</option>
+        </select>
+      </span>
+
+      <button id="refreshBtn">Yenile</button>
     </div>
   </div>
 
-  <canvas id="pnlChart"></canvas>
+  <!-- 1) Üst chart + KPI -->
+  <div class="card">
+    <div class="kpiRow" style="margin-bottom:12px">
+      <div class="kpi">
+        <div class="label">Toplam (Range) PNL</div>
+        <div id="kpiTotalPnl" class="value">—</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Win / Loss</div>
+        <div id="kpiWl" class="value">—</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Win Rate</div>
+        <div id="kpiWr" class="value">—</div>
+      </div>
+    </div>
 
-  <div class="pnl-box" style="margin-top:12px">
-  <div>
-    <div class="label">Win / Loss</div>
-    <div id="wlText" class="value">—</div>
+    <div class="chartWrap">
+      <canvas id="pnlChart"></canvas>
+    </div>
+    <div class="muted" style="margin-top:10px;font-size:12px">
+      Not: PNL hesaplaması = pnl - funding_fee - commission
+    </div>
   </div>
+
+  <!-- 2) Funding vs Normal özet -->
+  <div class="grid grid-2" style="margin-top:14px">
+    <div class="card">
+      <h2>Normal (source=normal)</h2>
+      <div class="kpiRow">
+        <div class="kpi">
+          <div class="label">PNL</div>
+          <div id="normalPnl" class="value">—</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Win / Loss</div>
+          <div id="normalWl" class="value">—</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Win Rate</div>
+          <div id="normalWr" class="value">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Funding (source=funding)</h2>
+      <div class="kpiRow">
+        <div class="kpi">
+          <div class="label">PNL</div>
+          <div id="fundingPnl" class="value">—</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Win / Loss</div>
+          <div id="fundingWl" class="value">—</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Win Rate</div>
+          <div id="fundingWr" class="value">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3) Balance değişimi -->
+  <div class="card" style="margin-top:14px">
+    <h2>Total Balance Change</h2>
+    <div class="kpiRow">
+      <div class="kpi">
+        <div class="label">Son 7 gün</div>
+        <div id="bal7" class="value">—</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Son 30 gün</div>
+        <div id="bal30" class="value">—</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Yıllık (YTD)</div>
+        <div id="balYtd" class="value">—</div>
+      </div>
+    </div>
+    <div class="muted" style="margin-top:10px;font-size:12px">
+      Hesap: total_futures_balance alanının ilgili periyottaki ilk ve son değer farkı
+    </div>
+  </div>
+
+  <!-- 4) Günlük tablo -->
+  <div class="card" style="margin-top:14px">
+    <h2>Günlük Win/Loss & PNL</h2>
+    <div class="tableWrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Tarih</th>
+            <th>W</th>
+            <th>L</th>
+            <th>PNL</th>
+          </tr>
+        </thead>
+        <tbody id="dailyBody">
+          <tr><td colspan="4" class="muted">Yükleniyor…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
 </div>
 
-  <script>
-    const totalEl = document.getElementById('totalPnl');
-    const ctx = document.getElementById('pnlChart').getContext('2d');
+<script>
+  const ctx = document.getElementById('pnlChart').getContext('2d');
+  let chart;
 
-    let chart;
+  const el = (id) => document.getElementById(id);
 
-    async function loadPNL() {
-  const res = await fetch('/api/futures-pnl');
-  const data = await res.json();
-
-  const rows = data.daily || [];
-  const stats = data.stats || {};
-
-  if (!rows.length) {
-    totalEl.textContent = '0.00';
-    return;
+  function fmtNum(n, digits=4){
+    const num = Number(n || 0);
+    return num.toFixed(digits);
   }
 
-  const labels = [];
-  let total = 0;
-  const cumulative = [];
-
-  for (const r of rows) {
-    labels.push(r.date);
-    total += Number(r.pnl);
-    cumulative.push(total);
+  function setValue(elm, n, digits=4){
+    const num = Number(n || 0);
+    elm.textContent = fmtNum(num, digits);
+    elm.className = 'value ' + (num >= 0 ? 'pos' : 'neg');
   }
 
-  totalEl.textContent = total.toFixed(4);
-  totalEl.className = 'value ' + (total >= 0 ? 'pnl-positive' : 'pnl-negative');
-
-  const wlEl = document.getElementById('wlText');
-  if (stats.total > 0) {
-    wlEl.textContent =
-      `${stats.wins}W / ${stats.losses}L  (${stats.winRate}%)`;
-  } else {
-    wlEl.textContent = '—';
-  }
-
-  if (chart) chart.destroy();
-
-  chart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [{
-        label: 'Toplam PNL',
-        data: cumulative,
-        borderWidth: 2,
-        borderColor: '#10b981',
-        tension: 0.25,
-        pointRadius: 2,
-      }]
-    },
-    options: {
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { title: { display: true, text: 'Tarih' } },
-        y: { title: { display: true, text: 'PNL' } }
-      }
+  async function apiGet(path){
+    const res = await fetch(path, {
+      headers: { 'x-dash-key': DASH_KEY }
+    });
+    if (!res.ok) {
+      const t = await res.text().catch(()=> '');
+      throw new Error(`API error (${res.status}): ${t}`);
     }
-  });
-}
+    return res.json();
+  }
 
-    loadPNL();
-  </script>
+  function buildChart(labels, cumulative){
+    if (chart) chart.destroy();
+
+    chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Cumulative PNL',
+          data: cumulative,
+          borderWidth: 2,
+          tension: 0.3,
+          pointRadius: 0
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (c) => `PNL: ${Number(c.raw).toFixed(4)}`
+            }
+          }
+        },
+        scales: {
+          x: { title: { display: true, text: 'Tarih' } },
+          y: {
+            title: { display: true, text: 'PNL' },
+            grid: { }
+          }
+        }
+      }
+    });
+  }
+
+  async function loadAll(){
+    const sinceDays = el('sinceDays').value;
+
+    // 1) Chart + main KPI
+    const pnlData = await apiGet(`/api/futures-pnl?since_days=${encodeURIComponent(sinceDays)}`);
+    const rows = pnlData.daily || [];
+    const stats = pnlData.stats || { wins:0, losses:0, total:0, winRate:0, totalPnl:0 };
+
+    const labels = [];
+    let total = 0;
+    const cumulative = [];
+
+    for (const r of rows) {
+      labels.push(r.date);
+      total += Number(r.pnl || 0);
+      cumulative.push(Number(total.toFixed(8)));
+    }
+
+    setValue(el('kpiTotalPnl'), total, 4);
+    el('kpiWl').textContent = `${stats.wins}W / ${stats.losses}L`;
+    el('kpiWr').textContent = `${Number(stats.winRate || 0).toFixed(2)}%`;
+    buildChart(labels, cumulative);
+
+    // 2) Funding vs Normal summary
+    const sum = await apiGet(`/api/futures-summary?since_days=${encodeURIComponent(sinceDays)}`);
+    const bySource = (sum && sum.bySource) ? sum.bySource : {};
+
+    const normal = bySource.normal || { wins:0, losses:0, winRate:0, pnl:0 };
+    const funding = bySource.funding || { wins:0, losses:0, winRate:0, pnl:0 };
+
+    setValue(el('normalPnl'), normal.pnl, 4);
+    el('normalWl').textContent = `${normal.wins}W / ${normal.losses}L`;
+    el('normalWr').textContent = `${Number(normal.winRate || 0).toFixed(2)}%`;
+
+    setValue(el('fundingPnl'), funding.pnl, 4);
+    el('fundingWl').textContent = `${funding.wins}W / ${funding.losses}L`;
+    el('fundingWr').textContent = `${Number(funding.winRate || 0).toFixed(2)}%`;
+
+    // 3) Balance changes
+    const bal = await apiGet(`/api/futures-balance-changes`);
+    setValue(el('bal7'), bal.diff_7d, 4);
+    setValue(el('bal30'), bal.diff_30d, 4);
+    setValue(el('balYtd'), bal.diff_ytd, 4);
+
+    // 4) Daily table (son 14 gün)
+    const daily = await apiGet(`/api/futures-daily?limit=14`);
+    const tbody = el('dailyBody');
+    tbody.innerHTML = '';
+
+    if (!daily.length){
+      tbody.innerHTML = `<tr><td colspan="4" class="muted">Kayıt yok</td></tr>`;
+      return;
+    }
+
+    for (const r of daily){
+      const pnl = Number(r.pnl || 0);
+      const pnlClass = pnl >= 0 ? 'pos' : 'neg';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${r.date}</td>
+        <td>${Number(r.wins || 0)}</td>
+        <td>${Number(r.losses || 0)}</td>
+        <td class="${pnlClass}">${pnl.toFixed(4)}</td>
+      `;
+      tbody.appendChild(tr);
+    }
+  }
+
+  el('refreshBtn').addEventListener('click', () => loadAll().catch(err => alert(err.message)));
+  el('sinceDays').addEventListener('change', () => loadAll().catch(err => alert(err.message)));
+
+  loadAll().catch(err => alert(err.message));
+</script>
 </body>
 </html>
