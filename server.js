@@ -366,6 +366,36 @@ app.get('/api/futures-balance-changes', requireDashKey, async (req, res) => {
   }
 });
 
+/**
+ * GET /api/futures-balance-history
+ * total_futures_balance zaman serisi (CLOSED)
+ */
+app.get('/api/futures-balance-history', requireDashKey, async (req, res) => {
+  try {
+    const sql = `
+      SELECT
+        DATE(date2) AS date,
+        MAX(total_futures_balance) AS balance
+      FROM futures_positions
+      WHERE status='CLOSED'
+        AND total_futures_balance IS NOT NULL
+        AND date2 IS NOT NULL
+      GROUP BY DATE(date2)
+      ORDER BY DATE(date2) ASC
+    `;
+
+    const [rows] = await pool.query(sql);
+
+    res.json(rows.map(r => ({
+      date: r.date,
+      balance: Number(r.balance || 0),
+    })));
+  } catch (err) {
+    console.error('[/api/futures-balance-history] Hata:', err);
+    res.status(500).json({ error: 'Balance verisi alınamadı' });
+  }
+});
+
 
 /** -------------------------------
  *  CMC ANALYZE API

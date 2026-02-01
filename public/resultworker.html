@@ -309,11 +309,24 @@
     </div>
   </div>
 
+  <!-- 5) Total Balance Chart -->
+  <div class="card" style="margin-top:14px">
+    <h2>Total Balance (Equity Curve)</h2>
+    <div class="chartWrap">
+      <canvas id="balanceChart"></canvas>
+    </div>
+    <div class="muted" style="margin-top:10px;font-size:12px">
+      Günlük kapanışlara göre total_futures_balance
+    </div>
+  </div>
+
 </div>
 
 <script>
   const ctx = document.getElementById('pnlChart').getContext('2d');
   let chart;
+  const balanceCtx = document.getElementById('balanceChart').getContext('2d');
+  let balanceChart;
 
   const el = (id) => document.getElementById(id);
 
@@ -375,6 +388,39 @@
       }
     });
   }
+  function buildBalanceChart(labels, data){
+    if (balanceChart) balanceChart.destroy();
+
+    balanceChart = new Chart(balanceCtx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Total Balance',
+          data,
+          borderWidth: 2,
+          tension: 0.25,
+          pointRadius: 0,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (c) => `Balance: ${Number(c.raw).toFixed(4)}`
+            }
+          }
+        },
+        scales: {
+          x: { title: { display: true, text: 'Tarih' } },
+          y: { title: { display: true, text: 'Balance' } }
+        }
+      }
+    });
+  }
 
   async function loadAll(){
     const sinceDays = el('sinceDays').value;
@@ -424,6 +470,13 @@
     const daily = await apiGet(`/api/futures-daily?limit=14`);
     const tbody = el('dailyBody');
     tbody.innerHTML = '';
+
+    // 5) Total balance chart
+    const balHist = await apiGet('/api/futures-balance-history');
+    const balLabels = balHist.map(r => r.date);
+    const balData = balHist.map(r => r.balance);
+
+    buildBalanceChart(balLabels, balData);
 
     if (!daily.length){
       tbody.innerHTML = `<tr><td colspan="4" class="muted">Kayıt yok</td></tr>`;
