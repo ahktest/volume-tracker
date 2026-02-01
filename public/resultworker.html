@@ -323,6 +323,15 @@
 </div>
 
 <script>
+
+  function formatDateTR(d){
+    const date = new Date(d);
+    const day = String(date.getDate()).padStart(2,'0');
+    const month = String(date.getMonth()+1).padStart(2,'0');
+    const year = date.getFullYear();
+    return `${day}.${month}.${year}`;
+  }
+
   const ctx = document.getElementById('pnlChart').getContext('2d');
   let chart;
   const balanceCtx = document.getElementById('balanceChart').getContext('2d');
@@ -364,30 +373,44 @@
           data: cumulative,
           borderWidth: 2,
           tension: 0.3,
-          pointRadius: 0
+          pointRadius: 0,
         }]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
+
+        interaction: {
+          mode: 'index',
+          intersect: false
+        },
+
         plugins: {
           legend: { display: false },
           tooltip: {
             callbacks: {
-              label: (c) => `PNL: ${Number(c.raw).toFixed(4)}`
+              title: (items) => {
+                return formatDateTR(items[0].label);
+              },
+              label: (item) => {
+                return `PNL: ${Number(item.raw).toFixed(4)}`;
+              }
             }
           }
         },
+
         scales: {
-          x: { title: { display: true, text: 'Tarih' } },
+          x: {
+            title: { display: true, text: 'Tarih' }
+          },
           y: {
-            title: { display: true, text: 'PNL' },
-            grid: { }
+            title: { display: true, text: 'PNL' }
           }
         }
       }
     });
   }
+
   function buildBalanceChart(labels, data){
     if (balanceChart) balanceChart.destroy();
 
@@ -406,17 +429,33 @@
       options: {
         responsive: true,
         maintainAspectRatio: false,
+
+        interaction: {
+          mode: 'index',
+          intersect: false
+        },
+
         plugins: {
           legend: { display: false },
           tooltip: {
             callbacks: {
-              label: (c) => `Balance: ${Number(c.raw).toFixed(4)}`
+              title: (items) => {
+                return formatDateTR(items[0].label);
+              },
+              label: (item) => {
+                return `Balance: ${Number(item.raw).toFixed(4)}`;
+              }
             }
           }
         },
+
         scales: {
-          x: { title: { display: true, text: 'Tarih' } },
-          y: { title: { display: true, text: 'Balance' } }
+          x: {
+            title: { display: true, text: 'Tarih' }
+          },
+          y: {
+            title: { display: true, text: 'Balance' }
+          }
         }
       }
     });
