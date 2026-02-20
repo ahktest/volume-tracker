@@ -502,7 +502,184 @@ app.get('/api/cmc/:slug', async (req, res) => {
 });
 
 
-// Sunucu başlatma
+/** ────────────────────────────────────────────
+ *  SIGNAL SCORES API (anomali-signal-resolv)
+ *  ──────────────────────────────────────────── */
+
+/**
+ * GET /api/signals/scores
+ * Tum skorlari listele (snapshot + score JOIN)
+ * En yeniden eskiye, manual_direction_ok veya manual_result bos olanlar uste
+ */
+app.get('/api/signals/scores', requireDashKey, async (req, res) => {
+  try {
+    const sql = `
+      SELECT
+        sc.id,
+        sc.symbol,
+        sc.score,
+        sc.direction,
+        sc.confidence,
+        sc.tp1,
+        sc.tp2,
+        sc.sl,
+        sc.manual_direction_ok,
+        sc.manual_result,
+        sc.exception_applied,
+        sc.created_at,
+        sn.source_type,
+        sn.entry_price,
+        sn.funding_fee,
+        sn.volume_change,
+        sn.price_change
+      FROM signal_scores sc
+      LEFT JOIN signal_snapshots sn ON sn.id = sc.signal_snapshot_id
+      ORDER BY
+        (sc.manual_direction_ok IS NULL OR sc.manual_result IS NULL) DESC,
+        sc.created_at DESC
+      LIMIT 200
+    `;
+    const [rows] = await pool.query(sql);
+    res.json(rows);
+  } catch (err) {
+    console.error('[/api/signals/scores] Hata:', err);
+    res.status(500).json({ error: 'Veri alinamadi' });
+  }
+});
+
+/**
+ * PATCH /api/signals/scores/:id
+ * Manuel degerlendirme guncelle
+ * Body: { manual_direction_ok: 1|0|null, manual_result: 'tp1'|'tp2'|'sl'|null }
+ */
+app.patch('/api/signals/scores/:id', requireDashKey, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { manual_direction_ok, manual_result } = req.body;
+
+    // Validate
+    if (manual_direction_ok !== null && manual_direction_ok !== 0 && manual_direction_ok !== 1) {
+      return res.status(400).json({ error: 'manual_direction_ok: 0, 1 veya null olmali' });
+    }
+    const validResults = ['tp1', 'tp2', 'sl', null];
+    if (!validResults.includes(manual_result)) {
+      return res.status(400).json({ error: 'manual_result: tp1, tp2, sl veya null olmali' });
+    }
+
+    const [result] = await pool.execute(
+      `UPDATE signal_scores
+       SET manual_direction_ok = ?, manual_result = ?, updated_at = NOW()
+       WHERE id = ?`,
+      [manual_direction_ok, manual_result, id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Kayit bulunamadi' });
+    }
+
+    res.json({ ok: true, id: Number(id) });
+  } catch (err) {
+    console.error('[PATCH /api/signals/scores] Hata:', err);
+    res.status(500).json({ error: 'Guncelleme hatasi' });
+  }
+});
+
+/**
+ * GET /api/signals/stats
+ * Dashboard istatistikleri:
+ * - totals: toplam, degerlendirilmis, yon basarisi, tp1/tp2/sl sayilari
+ * - by_source: source_type bazli kirilim
+ * - daily: gunluk detay (son 30 gun)
+ */
+app.get('/api/signals/stats', requireDashKey, async (req, res) => {
+  try {
+    // 1. Genel toplamlar
+    const [[totals]] = await pool.query(`
+      SELECT
+        COUNT(*) AS total,
+        SUM(CASE WHEN manual_direction_ok IS NOT NULL AND manual_result IS NOT NULL THEN 1 ELSE 0 END) AS reviewed,
+        SUM(CASE WHEN manual_direction_ok IS NULL OR manual_result IS NULL THEN 1 ELSE 0 END) AS pending,
+        SUM(CASE WHEN manual_direction_ok = 1 THEN 1 ELSE 0 END) AS direction_correct,
+        SUM(CASE WHEN manual_result = 'tp1' THEN 1 ELSE 0 END) AS tp1_count,
+        SUM(CASE WHEN manual_result = 'tp2' THEN 1 ELSE 0 END) AS tp2_count,
+        SUM(CASE WHEN manual_result = 'sl' THEN 1 ELSE 0 END) AS sl_count
+      FROM signal_scores
+    `);
+
+    // 2. Source type bazli kirilim
+    const [bySourceRows] = await pool.query(`
+      SELECT
+        COALESCE(sn.source_type, 'unknown') AS source_type,
+        COUNT(*) AS total,
+        SUM(CASE WHEN sc.manual_direction_ok IS NOT NULL AND sc.manual_result IS NOT NULL THEN 1 ELSE 0 END) AS reviewed,
+        SUM(CASE WHEN sc.manual_direction_ok = 1 THEN 1 ELSE 0 END) AS direction_correct,
+        SUM(CASE WHEN sc.manual_result = 'tp1' THEN 1 ELSE 0 END) AS tp1_count,
+        SUM(CASE WHEN sc.manual_result = 'tp2' THEN 1 ELSE 0 END) AS tp2_count,
+        SUM(CASE WHEN sc.manual_result = 'sl' THEN 1 ELSE 0 END) AS sl_count
+      FROM signal_scores sc
+      LEFT JOIN signal_snapshots sn ON sn.id = sc.signal_snapshot_id
+      GROUP BY COALESCE(sn.source_type, 'unknown')
+    `);
+
+    const by_source = {};
+    for (const r of bySourceRows) {
+      by_source[r.source_type] = {
+        total: Number(r.total),
+        reviewed: Number(r.reviewed),
+        direction_correct: Number(r.direction_correct),
+        tp1_count: Number(r.tp1_count),
+        tp2_count: Number(r.tp2_count),
+        sl_count: Number(r.sl_count),
+      };
+    }
+
+    // 3. Gunluk detay (son 30 gun)
+    const [dailyRows] = await pool.query(`
+      SELECT
+        DATE(sc.created_at) AS date,
+        COUNT(*) AS total,
+        SUM(CASE WHEN sc.manual_direction_ok IS NOT NULL AND sc.manual_result IS NOT NULL THEN 1 ELSE 0 END) AS reviewed,
+        SUM(CASE WHEN sc.manual_direction_ok = 1 THEN 1 ELSE 0 END) AS direction_correct,
+        SUM(CASE WHEN sc.manual_result = 'tp1' THEN 1 ELSE 0 END) AS tp1_count,
+        SUM(CASE WHEN sc.manual_result = 'tp2' THEN 1 ELSE 0 END) AS tp2_count,
+        SUM(CASE WHEN sc.manual_result = 'sl' THEN 1 ELSE 0 END) AS sl_count
+      FROM signal_scores sc
+      WHERE sc.created_at >= NOW() - INTERVAL 30 DAY
+      GROUP BY DATE(sc.created_at)
+      ORDER BY DATE(sc.created_at) DESC
+    `);
+
+    const daily = dailyRows.map(r => ({
+      date: r.date,
+      total: Number(r.total),
+      reviewed: Number(r.reviewed),
+      direction_correct: Number(r.direction_correct),
+      tp1_count: Number(r.tp1_count),
+      tp2_count: Number(r.tp2_count),
+      sl_count: Number(r.sl_count),
+    }));
+
+    res.json({
+      totals: {
+        total: Number(totals.total),
+        reviewed: Number(totals.reviewed),
+        pending: Number(totals.pending),
+        direction_correct: Number(totals.direction_correct),
+        tp1_count: Number(totals.tp1_count),
+        tp2_count: Number(totals.tp2_count),
+        sl_count: Number(totals.sl_count),
+      },
+      by_source,
+      daily,
+    });
+  } catch (err) {
+    console.error('[/api/signals/stats] Hata:', err);
+    res.status(500).json({ error: 'Istatistik alinamadi' });
+  }
+});
+
+
+// Sunucu baslatma
 app.listen(PORT, () => {
-  console.log(`Sunucu çalışıyor: http://localhost:${PORT}`);
+  console.log(`Sunucu calisiyor: http://localhost:${PORT}`);
 });

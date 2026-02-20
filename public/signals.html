@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Signal Scores</title>
+<link rel="icon" href="favicon.png" type="image/x-icon"/>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Segoe UI',Tahoma,sans-serif;background:#0b0f14;color:#e5e7eb;min-height:100vh}
+
+  /* ─── Login ─── */
+  .login-overlay{position:fixed;inset:0;background:#0b0f14;display:flex;align-items:center;justify-content:center;z-index:999}
+  .login-box{background:#111827;padding:40px 36px;border-radius:14px;text-align:center;min-width:320px}
+  .login-box h2{margin-bottom:18px;font-size:1.3rem;color:#93c5fd}
+  .login-box input{width:100%;padding:12px 14px;border:1px solid #374151;border-radius:8px;background:#1f2937;color:#e5e7eb;font-size:15px;outline:none;margin-bottom:14px}
+  .login-box input:focus{border-color:#60a5fa}
+  .login-box button{width:100%;padding:12px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:15px;cursor:pointer;font-weight:600}
+  .login-box button:hover{background:#1d4ed8}
+  .login-error{color:#f87171;font-size:13px;margin-top:8px;display:none}
+
+  /* ─── Layout ─── */
+  .container{max-width:1400px;margin:0 auto;padding:20px 16px}
+  .header-bar{display:flex;align-items:center;justify-content:space-between;padding:16px 0;border-bottom:1px solid #1f2937;margin-bottom:24px}
+  .header-bar h1{font-size:1.4rem;color:#93c5fd}
+  .header-bar .logout{padding:6px 14px;background:#374151;color:#9ca3af;border:none;border-radius:6px;cursor:pointer;font-size:13px}
+  .header-bar .logout:hover{background:#4b5563;color:#e5e7eb}
+
+  /* ─── Info banner ─── */
+  .info-banner{background:#065f46;color:#a7f3d0;padding:14px 18px;border-radius:10px;margin-bottom:20px;font-size:14px;display:none}
+
+  /* ─── Table ─── */
+  .table-wrap{overflow-x:auto;margin-bottom:40px}
+  table{width:100%;border-collapse:collapse;background:#111827;border-radius:10px;overflow:hidden;font-size:13px}
+  th{background:#0f172a;color:#94a3b8;font-weight:600;padding:10px 12px;text-align:left;white-space:nowrap;position:sticky;top:0}
+  td{padding:9px 12px;border-bottom:1px solid #1f2937;vertical-align:middle}
+  tr:hover td{background:#0d1320}
+
+  .dir-long{color:#34d399;font-weight:700}
+  .dir-short{color:#f87171;font-weight:700}
+  .conf-high{color:#34d399}.conf-medium{color:#fbbf24}.conf-low{color:#9ca3af}
+  .badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600}
+  .badge-normal{background:#1e3a5f;color:#60a5fa}
+  .badge-funding{background:#3b1f2b;color:#fb923c}
+
+  select{background:#1f2937;color:#e5e7eb;border:1px solid #374151;border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer}
+  select:focus{border-color:#60a5fa;outline:none}
+
+  .btn-save{background:#2563eb;color:#fff;border:none;border-radius:5px;padding:4px 10px;font-size:12px;cursor:pointer}
+  .btn-save:hover{background:#1d4ed8}
+  .btn-save:disabled{opacity:.4;cursor:default}
+  .saved-ok{color:#34d399;font-size:11px;margin-left:6px;display:none}
+
+  /* ─── Dashboard ─── */
+  .dash-title{font-size:1.2rem;color:#93c5fd;margin:30px 0 16px;padding-bottom:8px;border-bottom:1px solid #1f2937}
+  .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:24px}
+  .stat-card{background:#111827;border-radius:10px;padding:18px 20px}
+  .stat-card .label{color:#9ca3af;font-size:12px;margin-bottom:4px}
+  .stat-card .value{font-size:1.6rem;font-weight:700}
+  .stat-card .sub{color:#6b7280;font-size:12px;margin-top:2px}
+  .green{color:#34d399}.red{color:#f87171}.yellow{color:#fbbf24}.blue{color:#60a5fa}
+
+  .breakdown-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-bottom:24px}
+  .breakdown-card{background:#111827;border-radius:10px;padding:16px 20px}
+  .breakdown-card h4{color:#93c5fd;font-size:14px;margin-bottom:10px}
+  .breakdown-row{display:flex;justify-content:space-between;padding:4px 0;font-size:13px;border-bottom:1px solid #1a2332}
+  .breakdown-row .lbl{color:#9ca3af}.breakdown-row .val{font-weight:600}
+
+  .daily-table{width:100%;border-collapse:collapse;background:#111827;border-radius:10px;overflow:hidden;font-size:13px;margin-top:12px}
+  .daily-table th{background:#0f172a;color:#94a3b8;font-weight:600;padding:8px 12px;text-align:left}
+  .daily-table td{padding:8px 12px;border-bottom:1px solid #1f2937}
+
+  /* ─── Responsive ─── */
+  @media(max-width:768px){
+    .stats-grid{grid-template-columns:1fr 1fr}
+    .stat-card .value{font-size:1.2rem}
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════ LOGIN ═══════ -->
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-box">
+    <h2>Signal Scores</h2>
+    <input type="password" id="passInput" placeholder="Parola" autocomplete="off"/>
+    <button onclick="doLogin()">Gir</button>
+    <div class="login-error" id="loginErr">Parola yanlish</div>
+  </div>
+</div>
+
+<!-- ═══════ MAIN ═══════ -->
+<div class="container" id="mainApp" style="display:none">
+
+  <div class="header-bar">
+    <h1>Signal Scores</h1>
+    <button class="logout" onclick="doLogout()">Logout</button>
+  </div>
+
+  <!-- Info: hepsi dolu -->
+  <div class="info-banner" id="infoBanner">
+    Tum kayitlar dolu. Asagida dashboard istatistiklerini gorebilirsin.
+  </div>
+
+  <!-- ═══════ TABLE ═══════ -->
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Symbol</th>
+          <th>Source</th>
+          <th>Score</th>
+          <th>Direction</th>
+          <th>Confidence</th>
+          <th>Entry</th>
+          <th>TP1</th>
+          <th>TP2</th>
+          <th>SL</th>
+          <th>Tarih</th>
+          <th>Yon Dogru?</th>
+          <th>Sonuc</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="scoresBody"></tbody>
+    </table>
+  </div>
+
+  <!-- ═══════ DASHBOARD ═══════ -->
+  <h3 class="dash-title">Dashboard</h3>
+
+  <div class="stats-grid" id="statsGrid">
+    <!-- JS ile doldurulacak -->
+  </div>
+
+  <div class="breakdown-grid" id="breakdownGrid">
+    <!-- source_type bazli kirilim -->
+  </div>
+
+  <h3 class="dash-title">Gunluk Detay</h3>
+  <div class="table-wrap">
+    <table class="daily-table">
+      <thead>
+        <tr>
+          <th>Tarih</th>
+          <th>Sinyal</th>
+          <th>Yon Dogru</th>
+          <th>TP1</th>
+          <th>TP2</th>
+          <th>SL</th>
+          <th>Win Rate</th>
+        </tr>
+      </thead>
+      <tbody id="dailyBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const API_BASE = '';
+let KEY = '';
+
+// ─── Login ───
+function doLogin() {
+  const v = document.getElementById('passInput').value.trim();
+  if (!v) return;
+  KEY = v;
+  // test: ping API
+  fetch(API_BASE + '/api/signals/scores', { headers: { 'x-dash-key': KEY } })
+    .then(r => {
+      if (!r.ok) throw new Error();
+      document.getElementById('loginOverlay').style.display = 'none';
+      document.getElementById('mainApp').style.display = 'block';
+      sessionStorage.setItem('sig_key', KEY);
+      return r.json();
+    })
+    .then(data => {
+      renderTable(data);
+      loadDashboard();
+    })
+    .catch(() => {
+      const el = document.getElementById('loginErr');
+      el.style.display = 'block';
+      setTimeout(() => el.style.display = 'none', 2500);
+    });
+}
+
+function doLogout() {
+  sessionStorage.removeItem('sig_key');
+  KEY = '';
+  document.getElementById('mainApp').style.display = 'none';
+  document.getElementById('loginOverlay').style.display = 'flex';
+}
+
+// Auto-login
+(function() {
+  const saved = sessionStorage.getItem('sig_key');
+  if (saved) {
+    KEY = saved;
+    document.getElementById('passInput').value = saved;
+    doLogin();
+  }
+  document.getElementById('passInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doLogin();
+  });
+})();
+
+// ─── API helpers ───
+function api(path, opts = {}) {
+  return fetch(API_BASE + path, {
+    ...opts,
+    headers: { 'x-dash-key': KEY, 'Content-Type': 'application/json', ...(opts.headers || {}) },
+  }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
+}
+
+// ─── Render Table ───
+function renderTable(rows) {
+  const tbody = document.getElementById('scoresBody');
+  const needsReview = rows.filter(r => r.manual_direction_ok == null || r.manual_result == null);
+
+  if (needsReview.length === 0) {
+    document.getElementById('infoBanner').style.display = 'block';
+  } else {
+    document.getElementById('infoBanner').style.display = 'none';
+  }
+
+  tbody.innerHTML = rows.map((r, i) => {
+    const dirClass = r.direction === 'LONG' ? 'dir-long' : 'dir-short';
+    const confClass = 'conf-' + (r.confidence || 'low').toLowerCase();
+    const srcClass = (r.source_type || '').includes('funding') ? 'badge-funding' : 'badge-normal';
+    const srcLabel = (r.source_type || 'normal');
+
+    const dirVal = r.manual_direction_ok;
+    const resVal = r.manual_result;
+
+    const dirSelect = `
+      <select data-id="${r.id}" data-field="manual_direction_ok" onchange="markDirty(this)">
+        <option value="" ${dirVal == null ? 'selected' : ''}>-</option>
+        <option value="1" ${dirVal === 1 ? 'selected' : ''}>Dogru</option>
+        <option value="0" ${dirVal === 0 ? 'selected' : ''}>Yanlis</option>
+      </select>`;
+
+    const resSelect = `
+      <select data-id="${r.id}" data-field="manual_result" onchange="markDirty(this)">
+        <option value="" ${resVal == null ? 'selected' : ''}>-</option>
+        <option value="tp1" ${resVal === 'tp1' ? 'selected' : ''}>TP1</option>
+        <option value="tp2" ${resVal === 'tp2' ? 'selected' : ''}>TP2</option>
+        <option value="sl" ${resVal === 'sl' ? 'selected' : ''}>SL</option>
+      </select>`;
+
+    const ts = r.created_at ? new Date(r.created_at).toLocaleString('tr-TR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '-';
+
+    return `<tr>
+      <td>${i + 1}</td>
+      <td><strong>${r.symbol}</strong></td>
+      <td><span class="badge ${srcClass}">${srcLabel}</span></td>
+      <td>${r.score}</td>
+      <td class="${dirClass}">${r.direction}</td>
+      <td class="${confClass}">${r.confidence}</td>
+      <td>${fmt(r.entry_price)}</td>
+      <td>${fmt(r.tp1)}</td>
+      <td>${fmt(r.tp2)}</td>
+      <td>${fmt(r.sl)}</td>
+      <td>${ts}</td>
+      <td>${dirSelect}</td>
+      <td>${resSelect}</td>
+      <td>
+        <button class="btn-save" id="btn-${r.id}" onclick="saveRow(${r.id})" disabled>Kaydet</button>
+        <span class="saved-ok" id="ok-${r.id}">&#10003;</span>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function fmt(v) {
+  if (v == null) return '-';
+  const n = Number(v);
+  if (!Number.isFinite(n)) return '-';
+  return n < 1 ? n.toPrecision(5) : n.toFixed(2);
+}
+
+function markDirty(el) {
+  const id = el.dataset.id;
+  const btn = document.getElementById('btn-' + id);
+  if (btn) btn.disabled = false;
+}
+
+async function saveRow(id) {
+  const dirEl = document.querySelector(`select[data-id="${id}"][data-field="manual_direction_ok"]`);
+  const resEl = document.querySelector(`select[data-id="${id}"][data-field="manual_result"]`);
+
+  const body = {};
+  if (dirEl.value !== '') body.manual_direction_ok = Number(dirEl.value);
+  else body.manual_direction_ok = null;
+  if (resEl.value !== '') body.manual_result = resEl.value;
+  else body.manual_result = null;
+
+  try {
+    await api(`/api/signals/scores/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+    const btn = document.getElementById('btn-' + id);
+    btn.disabled = true;
+    const ok = document.getElementById('ok-' + id);
+    ok.style.display = 'inline';
+    setTimeout(() => ok.style.display = 'none', 2000);
+    // dashboard guncelle
+    loadDashboard();
+  } catch (e) {
+    alert('Kaydetme hatasi: ' + e.message);
+  }
+}
+
+// ─── Dashboard ───
+async function loadDashboard() {
+  try {
+    const stats = await api('/api/signals/stats');
+    renderStats(stats);
+    renderBreakdown(stats);
+    renderDaily(stats.daily || []);
+  } catch (e) {
+    console.error('Dashboard hata:', e);
+  }
+}
+
+function renderStats(s) {
+  const t = s.totals || {};
+  const grid = document.getElementById('statsGrid');
+
+  const winRate = t.reviewed > 0 ? ((t.direction_correct / t.reviewed) * 100).toFixed(1) : '-';
+  const tp1Rate = t.reviewed > 0 ? ((t.tp1_count / t.reviewed) * 100).toFixed(1) : '-';
+  const tp2Rate = t.reviewed > 0 ? ((t.tp2_count / t.reviewed) * 100).toFixed(1) : '-';
+  const slRate = t.reviewed > 0 ? ((t.sl_count / t.reviewed) * 100).toFixed(1) : '-';
+
+  grid.innerHTML = `
+    <div class="stat-card">
+      <div class="label">Toplam Sinyal</div>
+      <div class="value blue">${t.total || 0}</div>
+      <div class="sub">Degerlendirilmis: ${t.reviewed || 0}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Yon Basarisi (Win Rate)</div>
+      <div class="value ${Number(winRate) >= 50 ? 'green' : 'red'}">${winRate}%</div>
+      <div class="sub">${t.direction_correct || 0} / ${t.reviewed || 0} dogru</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">TP1 Orani</div>
+      <div class="value green">${tp1Rate}%</div>
+      <div class="sub">${t.tp1_count || 0} adet</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">TP2 Orani</div>
+      <div class="value green">${tp2Rate}%</div>
+      <div class="sub">${t.tp2_count || 0} adet</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">SL Orani</div>
+      <div class="value red">${slRate}%</div>
+      <div class="sub">${t.sl_count || 0} adet</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Beklenen</div>
+      <div class="value yellow">${t.pending || 0}</div>
+      <div class="sub">Degerlendirilmemis</div>
+    </div>
+  `;
+}
+
+function renderBreakdown(s) {
+  const grid = document.getElementById('breakdownGrid');
+  const sources = s.by_source || {};
+
+  grid.innerHTML = Object.entries(sources).map(([src, d]) => {
+    const wr = d.reviewed > 0 ? ((d.direction_correct / d.reviewed) * 100).toFixed(1) : '-';
+    return `
+    <div class="breakdown-card">
+      <h4>${src === 'funding_stuck' ? 'Funding Stuck' : 'Normal'}</h4>
+      <div class="breakdown-row"><span class="lbl">Sinyal</span><span class="val">${d.total}</span></div>
+      <div class="breakdown-row"><span class="lbl">Degerlendirilmis</span><span class="val">${d.reviewed}</span></div>
+      <div class="breakdown-row"><span class="lbl">Yon Basarisi</span><span class="val ${Number(wr) >= 50 ? 'green' : 'red'}">${wr}%</span></div>
+      <div class="breakdown-row"><span class="lbl">TP1</span><span class="val green">${d.tp1_count}</span></div>
+      <div class="breakdown-row"><span class="lbl">TP2</span><span class="val green">${d.tp2_count}</span></div>
+      <div class="breakdown-row"><span class="lbl">SL</span><span class="val red">${d.sl_count}</span></div>
+    </div>`;
+  }).join('');
+}
+
+function renderDaily(days) {
+  const tbody = document.getElementById('dailyBody');
+  tbody.innerHTML = days.map(d => {
+    const wr = d.reviewed > 0 ? ((d.direction_correct / d.reviewed) * 100).toFixed(1) + '%' : '-';
+    const wrClass = Number(wr) >= 50 ? 'green' : (wr === '-' ? '' : 'red');
+    const dateStr = new Date(d.date).toLocaleDateString('tr-TR', { day:'2-digit', month:'2-digit', year:'numeric' });
+    return `<tr>
+      <td>${dateStr}</td>
+      <td>${d.total}</td>
+      <td>${d.direction_correct} / ${d.reviewed}</td>
+      <td class="green">${d.tp1_count}</td>
+      <td class="green">${d.tp2_count}</td>
+      <td class="red">${d.sl_count}</td>
+      <td class="${wrClass}">${wr}</td>
+    </tr>`;
+  }).join('');
+}
+</script>
+</body>
+</html>
