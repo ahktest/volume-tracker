@@ -1,213 +1,120 @@
 <!doctype html>
 <html lang="tr">
 <head>
-  <meta charset="utf-8" />
+  <meta charset="utf-8"/>
   <title>Futures PNL Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-  <!-- Chart.js -->
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <link rel="icon" href="favicon.png" type="image/x-icon"/>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <style>
-    :root { color-scheme: light dark; }
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Segoe UI',Tahoma,sans-serif;background:#0b0f14;color:#e5e7eb;min-height:100vh}
 
-    body{
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      margin: 0;
-      padding: 16px;
-      background: Canvas;
-      color: CanvasText;
-    }
+    /* ─── Login ─── */
+    .login-overlay{position:fixed;inset:0;background:#0b0f14;display:flex;align-items:center;justify-content:center;z-index:999}
+    .login-box{background:#111827;padding:40px 36px;border-radius:14px;text-align:center;min-width:320px}
+    .login-box h2{margin-bottom:18px;font-size:1.3rem;color:#93c5fd}
+    .login-box input{width:100%;padding:12px 14px;border:1px solid #374151;border-radius:8px;background:#1f2937;color:#e5e7eb;font-size:15px;outline:none;margin-bottom:14px}
+    .login-box input:focus{border-color:#60a5fa}
+    .login-box button{width:100%;padding:12px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:15px;cursor:pointer;font-weight:600}
+    .login-box button:hover{background:#1d4ed8}
+    .login-error{color:#f87171;font-size:13px;margin-top:8px;display:none}
 
-    .container{
-      max-width: 1200px;
-      margin: 0 auto;
-    }
+    /* ─── Layout ─── */
+    .container{max-width:1200px;margin:0 auto;padding:20px 16px}
+    .header-bar{display:flex;align-items:center;justify-content:space-between;padding:16px 0;border-bottom:1px solid #1f2937;margin-bottom:24px}
+    .header-bar h1{font-size:1.4rem;color:#93c5fd}
+    .header-bar .sub{color:#6b7280;font-size:13px;margin-top:2px}
+    .header-bar .logout{padding:6px 14px;background:#374151;color:#9ca3af;border:none;border-radius:6px;cursor:pointer;font-size:13px}
+    .header-bar .logout:hover{background:#4b5563;color:#e5e7eb}
 
-    h1{
-      margin: 0 0 6px 0;
-      font-size: 22px;
-      letter-spacing: .2px;
-    }
+    /* ─── Filters ─── */
+    .filters{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:20px}
+    .pill{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;background:#111827;border:1px solid #1f2937;border-radius:10px;font-size:13px;color:#9ca3af}
+    .pill select{background:#1f2937;color:#e5e7eb;border:1px solid #374151;border-radius:6px;padding:6px 10px;font-size:13px;outline:none;cursor:pointer}
+    .pill select:focus{border-color:#60a5fa}
+    .btn-refresh{padding:8px 16px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600}
+    .btn-refresh:hover{background:#1d4ed8}
 
-    .sub{
-      opacity: .7;
-      margin-bottom: 16px;
-      font-size: 13px;
-    }
+    /* ─── Cards ─── */
+    .card{background:#111827;border-radius:12px;border:1px solid #1f2937;padding:18px 20px;margin-bottom:16px}
+    .card h2{font-size:14px;color:#93c5fd;margin-bottom:12px;font-weight:600}
 
-    .topbar{
-      display: flex;
-      gap: 12px;
-      align-items: center;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      margin-bottom: 12px;
-    }
+    /* ─── KPI ─── */
+    .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+    .kpi{background:#0f172a;border:1px solid #1a2332;border-radius:10px;padding:14px 16px}
+    .kpi .label{font-size:11px;color:#6b7280;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
+    .kpi .value{font-size:1.5rem;font-weight:700}
+    .pos{color:#34d399}.neg{color:#f87171}
 
-    .filters{
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      flex-wrap: wrap;
-    }
+    /* ─── Grid ─── */
+    .grid-2{display:grid;grid-template-columns:1fr;gap:16px}
+    @media(min-width:900px){.grid-2{grid-template-columns:1fr 1fr}}
 
-    select, button{
-      padding: 10px 12px;
-      border-radius: 10px;
-      border: 1px solid color-mix(in oklab, CanvasText 16%, transparent);
-      background: color-mix(in oklab, Canvas 92%, CanvasText 8%);
-      color: CanvasText;
-      font-size: 14px;
-      outline: none;
-    }
-    button{ cursor: pointer; }
+    /* ─── Chart ─── */
+    .chart-wrap{height:380px;margin-top:12px}
+    .chart-wrap canvas{width:100%!important;height:100%!important}
 
-    .grid{
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 14px;
-    }
-    @media (min-width: 900px){
-      .grid-2{
-        grid-template-columns: 1fr 1fr;
-      }
-    }
+    /* ─── Table ─── */
+    .table-wrap{overflow-x:auto;border-radius:10px}
+    table{width:100%;border-collapse:collapse;min-width:420px;font-size:13px}
+    thead th{background:#0f172a;color:#94a3b8;font-weight:600;padding:10px 12px;text-align:left;white-space:nowrap;position:sticky;top:0;border-bottom:1px solid #1f2937}
+    tbody td{padding:9px 12px;border-bottom:1px solid #1a2332;white-space:nowrap}
+    tr:hover td{background:#0d1320}
 
-    .card{
-      border-radius: 14px;
-      border: 1px solid color-mix(in oklab, CanvasText 12%, transparent);
-      background: color-mix(in oklab, Canvas 95%, CanvasText 5%);
-      padding: 14px;
-    }
+    .muted{color:#6b7280;font-size:12px;margin-top:8px}
 
-    .card h2{
-      margin: 0 0 10px 0;
-      font-size: 15px;
-      opacity: .85;
-    }
-
-    .kpiRow{
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 10px;
-    }
-    @media (min-width: 650px){
-      .kpiRow{
-        grid-template-columns: 1fr 1fr 1fr;
-      }
-    }
-
-    .kpi{
-      border-radius: 12px;
-      border: 1px solid color-mix(in oklab, CanvasText 10%, transparent);
-      background: color-mix(in oklab, Canvas 93%, CanvasText 7%);
-      padding: 12px;
-    }
-    .kpi .label{
-      font-size: 12px;
-      opacity: .7;
-      margin-bottom: 6px;
-    }
-    .kpi .value{
-      font-size: 22px;
-      font-weight: 750;
-      letter-spacing: .2px;
-    }
-    .pos{ color: #10b981; }
-    .neg{ color: #ef4444; }
-
-    .chartWrap{
-      height: 420px;
-    }
-    canvas{
-      width: 100% !important;
-      height: 100% !important;
-    }
-
-    .tableWrap{
-      overflow: auto;
-      border-radius: 12px;
-      border: 1px solid color-mix(in oklab, CanvasText 10%, transparent);
-    }
-
-    table{
-      width: 100%;
-      border-collapse: collapse;
-      min-width: 520px;
-      background: color-mix(in oklab, Canvas 96%, CanvasText 4%);
-    }
-    thead th{
-      position: sticky;
-      top: 0;
-      z-index: 1;
-      background: color-mix(in oklab, Canvas 90%, CanvasText 10%);
-      text-align: left;
-      font-size: 12px;
-      padding: 10px;
-      opacity: .85;
-      border-bottom: 1px solid color-mix(in oklab, CanvasText 14%, transparent);
-      white-space: nowrap;
-    }
-    tbody td{
-      padding: 10px;
-      border-bottom: 1px solid color-mix(in oklab, CanvasText 8%, transparent);
-      font-size: 13px;
-      white-space: nowrap;
-    }
-
-    .muted{ opacity: .7; }
-    .pill{
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      border-radius: 999px;
-      padding: 8px 12px;
-      border: 1px solid color-mix(in oklab, CanvasText 14%, transparent);
-      background: color-mix(in oklab, Canvas 92%, CanvasText 8%);
-      font-size: 13px;
+    /* ─── Responsive ─── */
+    @media(max-width:650px){
+      .kpi-row{grid-template-columns:1fr}
+      .kpi .value{font-size:1.2rem}
     }
   </style>
 </head>
 <body>
 
-<script>
-  // ✅ Basit giriş (ahktest)
-  const DASH_KEY = prompt("Erişim anahtarı:");
-  if (DASH_KEY !== "ahktest") {
-    document.body.innerHTML = "<div style='padding:24px;font-family:system-ui'><h2>Erişim reddedildi</h2><div class='muted'>Anahtar hatalı.</div></div>";
-    throw new Error("Unauthorized");
-  }
-</script>
+<!-- ═══════ LOGIN ═══════ -->
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-box">
+    <h2>Futures PNL Dashboard</h2>
+    <input type="password" id="passInput" placeholder="Parola" autocomplete="off"/>
+    <button onclick="doLogin()">Gir</button>
+    <div class="login-error" id="loginErr">Parola yanlis</div>
+  </div>
+</div>
 
-<div class="container">
-  <div class="topbar">
+<!-- ═══════ MAIN ═══════ -->
+<div class="container" id="mainApp" style="display:none">
+
+  <div class="header-bar">
     <div>
       <h1>Futures PNL</h1>
-      <div class="sub" id="subtitle">Kapanan pozisyonlara göre performans</div>
+      <div class="sub">Kapanan pozisyonlara gore performans</div>
     </div>
-
-    <div class="filters">
-      <span class="pill">
-        Range:
-        <select id="sinceDays">
-          <option value="7">7 gün</option>
-          <option value="30" selected>30 gün</option>
-          <option value="90">90 gün</option>
-          <option value="365">365 gün</option>
-          <option value="0">tümü</option>
-        </select>
-      </span>
-
-      <button id="refreshBtn">Yenile</button>
-    </div>
+    <button class="logout" onclick="doLogout()">Logout</button>
   </div>
 
-  <!-- 1) Üst chart + KPI -->
+  <div class="filters">
+    <span class="pill">
+      Range:
+      <select id="sinceDays">
+        <option value="7">7 gun</option>
+        <option value="30" selected>30 gun</option>
+        <option value="90">90 gun</option>
+        <option value="365">365 gun</option>
+        <option value="0">tumu</option>
+      </select>
+    </span>
+    <button class="btn-refresh" id="refreshBtn">Yenile</button>
+  </div>
+
+  <!-- 1) Chart + KPI -->
   <div class="card">
-    <div class="kpiRow" style="margin-bottom:12px">
+    <h2>Kumulatif PNL</h2>
+    <div class="kpi-row" style="margin-bottom:14px">
       <div class="kpi">
-        <div class="label">Toplam (Range) PNL</div>
+        <div class="label">Toplam PNL</div>
         <div id="kpiTotalPnl" class="value">—</div>
       </div>
       <div class="kpi">
@@ -219,20 +126,17 @@
         <div id="kpiWr" class="value">—</div>
       </div>
     </div>
-
-    <div class="chartWrap">
+    <div class="chart-wrap">
       <canvas id="pnlChart"></canvas>
     </div>
-    <div class="muted" style="margin-top:10px;font-size:12px">
-      Not: PNL hesaplaması = pnl - funding_fee - commission
-    </div>
+    <div class="muted">PNL = pnl - funding_fee - commission</div>
   </div>
 
-  <!-- 2) Funding vs Normal özet -->
-  <div class="grid grid-2" style="margin-top:14px">
+  <!-- 2) Funding vs Normal -->
+  <div class="grid-2">
     <div class="card">
       <h2>Normal (source=normal)</h2>
-      <div class="kpiRow">
+      <div class="kpi-row">
         <div class="kpi">
           <div class="label">PNL</div>
           <div id="normalPnl" class="value">—</div>
@@ -250,7 +154,7 @@
 
     <div class="card">
       <h2>Funding (source=funding)</h2>
-      <div class="kpiRow">
+      <div class="kpi-row">
         <div class="kpi">
           <div class="label">PNL</div>
           <div id="fundingPnl" class="value">—</div>
@@ -267,32 +171,30 @@
     </div>
   </div>
 
-  <!-- 3) Balance değişimi -->
-  <div class="card" style="margin-top:14px">
+  <!-- 3) Balance degisimi -->
+  <div class="card">
     <h2>Total Balance Change</h2>
-    <div class="kpiRow">
+    <div class="kpi-row">
       <div class="kpi">
-        <div class="label">Son 7 gün</div>
+        <div class="label">Son 7 gun</div>
         <div id="bal7" class="value">—</div>
       </div>
       <div class="kpi">
-        <div class="label">Son 30 gün</div>
+        <div class="label">Son 30 gun</div>
         <div id="bal30" class="value">—</div>
       </div>
       <div class="kpi">
-        <div class="label">Yıllık (YTD)</div>
+        <div class="label">Yillik (YTD)</div>
         <div id="balYtd" class="value">—</div>
       </div>
     </div>
-    <div class="muted" style="margin-top:10px;font-size:12px">
-      Hesap: total_futures_balance alanının ilgili periyottaki ilk ve son değer farkı
-    </div>
+    <div class="muted">total_futures_balance: ilgili periyottaki ilk ve son deger farki</div>
   </div>
 
-  <!-- 4) Günlük tablo -->
-  <div class="card" style="margin-top:14px">
-    <h2>Günlük Win/Loss & PNL</h2>
-    <div class="tableWrap">
+  <!-- 4) Gunluk tablo -->
+  <div class="card">
+    <h2>Gunluk Win/Loss & PNL</h2>
+    <div class="table-wrap">
       <table>
         <thead>
           <tr>
@@ -303,243 +205,274 @@
           </tr>
         </thead>
         <tbody id="dailyBody">
-          <tr><td colspan="4" class="muted">Yükleniyor…</td></tr>
+          <tr><td colspan="4" class="muted">Yukleniyor...</td></tr>
         </tbody>
       </table>
     </div>
   </div>
 
-  <!-- 5) Total Balance Chart -->
-  <div class="card" style="margin-top:14px">
+  <!-- 5) Balance Chart -->
+  <div class="card">
     <h2>Total Balance (Equity Curve)</h2>
-    <div class="chartWrap">
+    <div class="chart-wrap">
       <canvas id="balanceChart"></canvas>
     </div>
-    <div class="muted" style="margin-top:10px;font-size:12px">
-      Günlük kapanışlara göre total_futures_balance
-    </div>
+    <div class="muted">Gunluk kapanislara gore total_futures_balance</div>
   </div>
 
 </div>
 
 <script>
+let DASH_KEY = '';
 
-  function formatDateTR(d){
-    const date = new Date(d);
-    const day = String(date.getDate()).padStart(2,'0');
-    const month = String(date.getMonth()+1).padStart(2,'0');
-    const year = date.getFullYear();
-    return `${day}.${month}.${year}`;
-  }
-
-  const ctx = document.getElementById('pnlChart').getContext('2d');
-  let chart;
-  const balanceCtx = document.getElementById('balanceChart').getContext('2d');
-  let balanceChart;
-
-  const el = (id) => document.getElementById(id);
-
-  function fmtNum(n, digits=4){
-    const num = Number(n || 0);
-    return num.toFixed(digits);
-  }
-
-  function setValue(elm, n, digits=4){
-    const num = Number(n || 0);
-    elm.textContent = fmtNum(num, digits);
-    elm.className = 'value ' + (num >= 0 ? 'pos' : 'neg');
-  }
-
-  async function apiGet(path){
-    const res = await fetch(path, {
-      headers: { 'x-dash-key': DASH_KEY }
+// ─── Login ───
+function doLogin() {
+  const v = document.getElementById('passInput').value.trim();
+  if (!v) return;
+  DASH_KEY = v;
+  // test API
+  fetch('/api/futures-pnl?since_days=7', { headers: { 'x-dash-key': DASH_KEY } })
+    .then(r => {
+      if (!r.ok) throw new Error();
+      document.getElementById('loginOverlay').style.display = 'none';
+      document.getElementById('mainApp').style.display = 'block';
+      sessionStorage.setItem('pnl_key', DASH_KEY);
+      loadAll().catch(err => console.error(err));
+    })
+    .catch(() => {
+      const el = document.getElementById('loginErr');
+      el.style.display = 'block';
+      setTimeout(() => el.style.display = 'none', 2500);
     });
-    if (!res.ok) {
-      const t = await res.text().catch(()=> '');
-      throw new Error(`API error (${res.status}): ${t}`);
-    }
-    return res.json();
+}
+
+function doLogout() {
+  sessionStorage.removeItem('pnl_key');
+  DASH_KEY = '';
+  document.getElementById('mainApp').style.display = 'none';
+  document.getElementById('loginOverlay').style.display = 'flex';
+}
+
+// Auto-login
+(function() {
+  const saved = sessionStorage.getItem('pnl_key');
+  if (saved) {
+    DASH_KEY = saved;
+    document.getElementById('passInput').value = saved;
+    doLogin();
   }
+  document.getElementById('passInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doLogin();
+  });
+})();
 
-  function buildChart(labels, cumulative){
-    if (chart) chart.destroy();
+// ─── Helpers ───
+const el = (id) => document.getElementById(id);
 
-    chart = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels,
-        datasets: [{
-          label: 'Cumulative PNL',
-          data: cumulative,
-          borderWidth: 2,
-          tension: 0.3,
-          pointRadius: 0,
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
+function formatDateTR(d) {
+  const date = new Date(d);
+  return String(date.getDate()).padStart(2,'0') + '.' + String(date.getMonth()+1).padStart(2,'0') + '.' + date.getFullYear();
+}
 
-        interaction: {
-          mode: 'index',
-          intersect: false
-        },
+function fmtNum(n, digits=4) {
+  return Number(n || 0).toFixed(digits);
+}
 
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              title: (items) => {
-                return formatDateTR(items[0].label);
-              },
-              label: (item) => {
-                return `PNL: ${Number(item.raw).toFixed(4)}`;
-              }
-            }
-          }
-        },
+function setValue(elm, n, digits=4) {
+  const num = Number(n || 0);
+  elm.textContent = fmtNum(num, digits);
+  elm.className = 'value ' + (num >= 0 ? 'pos' : 'neg');
+}
 
-        scales: {
-          x: {
-            title: { display: true, text: 'Tarih' }
-          },
-          y: {
-            title: { display: true, text: 'PNL' }
+async function apiGet(path) {
+  const res = await fetch(path, { headers: { 'x-dash-key': DASH_KEY } });
+  if (!res.ok) throw new Error(`API error (${res.status})`);
+  return res.json();
+}
+
+// ─── Chart theme ───
+const chartColors = {
+  line: '#60a5fa',
+  grid: '#1f2937',
+  text: '#6b7280',
+  bg: 'rgba(96, 165, 250, 0.08)',
+};
+
+function darkScales() {
+  return {
+    x: {
+      ticks: { color: chartColors.text, font: { size: 11 } },
+      grid: { color: chartColors.grid },
+      title: { display: true, text: 'Tarih', color: chartColors.text }
+    },
+    y: {
+      ticks: { color: chartColors.text, font: { size: 11 } },
+      grid: { color: chartColors.grid },
+    }
+  };
+}
+
+// ─── Charts ───
+const ctx = document.getElementById('pnlChart').getContext('2d');
+let chart;
+const balanceCtx = document.getElementById('balanceChart').getContext('2d');
+let balanceChart;
+
+function buildChart(labels, cumulative) {
+  if (chart) chart.destroy();
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Cumulative PNL',
+        data: cumulative,
+        borderColor: chartColors.line,
+        backgroundColor: chartColors.bg,
+        borderWidth: 2,
+        tension: 0.3,
+        pointRadius: 0,
+        fill: true,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1f2937',
+          titleColor: '#e5e7eb',
+          bodyColor: '#e5e7eb',
+          borderColor: '#374151',
+          borderWidth: 1,
+          callbacks: {
+            title: (items) => formatDateTR(items[0].label),
+            label: (item) => `PNL: ${Number(item.raw).toFixed(4)}`
           }
         }
-      }
-    });
-  }
-
-  function buildBalanceChart(labels, data){
-    if (balanceChart) balanceChart.destroy();
-
-    balanceChart = new Chart(balanceCtx, {
-      type: 'line',
-      data: {
-        labels,
-        datasets: [{
-          label: 'Total Balance',
-          data,
-          borderWidth: 2,
-          tension: 0.25,
-          pointRadius: 0,
-        }]
       },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
+      scales: { ...darkScales(), y: { ...darkScales().y, title: { display: true, text: 'PNL', color: chartColors.text } } }
+    }
+  });
+}
 
-        interaction: {
-          mode: 'index',
-          intersect: false
-        },
-
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              title: (items) => {
-                return formatDateTR(items[0].label);
-              },
-              label: (item) => {
-                return `Balance: ${Number(item.raw).toFixed(4)}`;
-              }
-            }
-          }
-        },
-
-        scales: {
-          x: {
-            title: { display: true, text: 'Tarih' }
-          },
-          y: {
-            title: { display: true, text: 'Balance' }
+function buildBalanceChart(labels, data) {
+  if (balanceChart) balanceChart.destroy();
+  balanceChart = new Chart(balanceCtx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Total Balance',
+        data,
+        borderColor: '#34d399',
+        backgroundColor: 'rgba(52, 211, 153, 0.08)',
+        borderWidth: 2,
+        tension: 0.25,
+        pointRadius: 0,
+        fill: true,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1f2937',
+          titleColor: '#e5e7eb',
+          bodyColor: '#e5e7eb',
+          borderColor: '#374151',
+          borderWidth: 1,
+          callbacks: {
+            title: (items) => formatDateTR(items[0].label),
+            label: (item) => `Balance: ${Number(item.raw).toFixed(4)}`
           }
         }
-      }
-    });
+      },
+      scales: { ...darkScales(), y: { ...darkScales().y, title: { display: true, text: 'Balance', color: chartColors.text } } }
+    }
+  });
+}
+
+// ─── Load ───
+async function loadAll() {
+  const sinceDays = el('sinceDays').value;
+
+  // 1) Chart + main KPI
+  const pnlData = await apiGet(`/api/futures-pnl?since_days=${encodeURIComponent(sinceDays)}`);
+  const rows = pnlData.daily || [];
+  const stats = pnlData.stats || { wins:0, losses:0, total:0, winRate:0, totalPnl:0 };
+
+  const labels = [];
+  let total = 0;
+  const cumulative = [];
+  for (const r of rows) {
+    labels.push(r.date);
+    total += Number(r.pnl || 0);
+    cumulative.push(Number(total.toFixed(8)));
   }
 
-  async function loadAll(){
-    const sinceDays = el('sinceDays').value;
+  setValue(el('kpiTotalPnl'), total, 4);
+  el('kpiWl').textContent = `${stats.wins}W / ${stats.losses}L`;
+  el('kpiWr').textContent = `${Number(stats.winRate || 0).toFixed(2)}%`;
+  el('kpiWr').className = 'value ' + (Number(stats.winRate) >= 50 ? 'pos' : 'neg');
+  buildChart(labels, cumulative);
 
-    // 1) Chart + main KPI
-    const pnlData = await apiGet(`/api/futures-pnl?since_days=${encodeURIComponent(sinceDays)}`);
-    const rows = pnlData.daily || [];
-    const stats = pnlData.stats || { wins:0, losses:0, total:0, winRate:0, totalPnl:0 };
+  // 2) Funding vs Normal
+  const sum = await apiGet(`/api/futures-summary?since_days=${encodeURIComponent(sinceDays)}`);
+  const bySource = (sum && sum.bySource) ? sum.bySource : {};
+  const normal = bySource.normal || { wins:0, losses:0, winRate:0, pnl:0 };
+  const funding = bySource.funding || { wins:0, losses:0, winRate:0, pnl:0 };
 
-    const labels = [];
-    let total = 0;
-    const cumulative = [];
+  setValue(el('normalPnl'), normal.pnl, 4);
+  el('normalWl').textContent = `${normal.wins}W / ${normal.losses}L`;
+  el('normalWr').textContent = `${Number(normal.winRate || 0).toFixed(2)}%`;
+  el('normalWr').className = 'value ' + (Number(normal.winRate) >= 50 ? 'pos' : 'neg');
 
-    for (const r of rows) {
-      labels.push(r.date);
-      total += Number(r.pnl || 0);
-      cumulative.push(Number(total.toFixed(8)));
-    }
+  setValue(el('fundingPnl'), funding.pnl, 4);
+  el('fundingWl').textContent = `${funding.wins}W / ${funding.losses}L`;
+  el('fundingWr').textContent = `${Number(funding.winRate || 0).toFixed(2)}%`;
+  el('fundingWr').className = 'value ' + (Number(funding.winRate) >= 50 ? 'pos' : 'neg');
 
-    setValue(el('kpiTotalPnl'), total, 4);
-    el('kpiWl').textContent = `${stats.wins}W / ${stats.losses}L`;
-    el('kpiWr').textContent = `${Number(stats.winRate || 0).toFixed(2)}%`;
-    buildChart(labels, cumulative);
+  // 3) Balance changes
+  const bal = await apiGet('/api/futures-balance-changes');
+  setValue(el('bal7'), bal.diff_7d, 4);
+  setValue(el('bal30'), bal.diff_30d, 4);
+  setValue(el('balYtd'), bal.diff_ytd, 4);
 
-    // 2) Funding vs Normal summary
-    const sum = await apiGet(`/api/futures-summary?since_days=${encodeURIComponent(sinceDays)}`);
-    const bySource = (sum && sum.bySource) ? sum.bySource : {};
+  // 4) Daily table
+  const daily = await apiGet(`/api/futures-daily?limit=14`);
+  const tbody = el('dailyBody');
+  tbody.innerHTML = '';
 
-    const normal = bySource.normal || { wins:0, losses:0, winRate:0, pnl:0 };
-    const funding = bySource.funding || { wins:0, losses:0, winRate:0, pnl:0 };
+  // 5) Balance chart
+  const balHist = await apiGet('/api/futures-balance-history');
+  buildBalanceChart(balHist.map(r => r.date), balHist.map(r => r.balance));
 
-    setValue(el('normalPnl'), normal.pnl, 4);
-    el('normalWl').textContent = `${normal.wins}W / ${normal.losses}L`;
-    el('normalWr').textContent = `${Number(normal.winRate || 0).toFixed(2)}%`;
-
-    setValue(el('fundingPnl'), funding.pnl, 4);
-    el('fundingWl').textContent = `${funding.wins}W / ${funding.losses}L`;
-    el('fundingWr').textContent = `${Number(funding.winRate || 0).toFixed(2)}%`;
-
-    // 3) Balance changes
-    const bal = await apiGet(`/api/futures-balance-changes`);
-    setValue(el('bal7'), bal.diff_7d, 4);
-    setValue(el('bal30'), bal.diff_30d, 4);
-    setValue(el('balYtd'), bal.diff_ytd, 4);
-
-    // 4) Daily table (son 14 gün)
-    const daily = await apiGet(`/api/futures-daily?limit=14`);
-    const tbody = el('dailyBody');
-    tbody.innerHTML = '';
-
-    // 5) Total balance chart
-    const balHist = await apiGet('/api/futures-balance-history');
-    const balLabels = balHist.map(r => r.date);
-    const balData = balHist.map(r => r.balance);
-
-    buildBalanceChart(balLabels, balData);
-
-    if (!daily.length){
-      tbody.innerHTML = `<tr><td colspan="4" class="muted">Kayıt yok</td></tr>`;
-      return;
-    }
-
-    for (const r of daily){
-      const pnl = Number(r.pnl || 0);
-      const pnlClass = pnl >= 0 ? 'pos' : 'neg';
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${r.date}</td>
-        <td>${Number(r.wins || 0)}</td>
-        <td>${Number(r.losses || 0)}</td>
-        <td class="${pnlClass}">${pnl.toFixed(4)}</td>
-      `;
-      tbody.appendChild(tr);
-    }
+  if (!daily.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="muted">Kayit yok</td></tr>';
+    return;
   }
 
-  el('refreshBtn').addEventListener('click', () => loadAll().catch(err => alert(err.message)));
-  el('sinceDays').addEventListener('change', () => loadAll().catch(err => alert(err.message)));
+  for (const r of daily) {
+    const pnl = Number(r.pnl || 0);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${r.date}</td>
+      <td>${Number(r.wins || 0)}</td>
+      <td>${Number(r.losses || 0)}</td>
+      <td class="${pnl >= 0 ? 'pos' : 'neg'}">${pnl.toFixed(4)}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
 
-  loadAll().catch(err => alert(err.message));
+el('refreshBtn').addEventListener('click', () => loadAll().catch(err => alert(err.message)));
+el('sinceDays').addEventListener('change', () => loadAll().catch(err => alert(err.message)));
 </script>
 </body>
 </html>
