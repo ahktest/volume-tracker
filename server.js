@@ -659,6 +659,32 @@ app.get('/api/signals/stats', requireDashKey, async (req, res) => {
       sl_count: Number(r.sl_count),
     }));
 
+    // 4. Confidence bazli kirilim (HIGH / MEDIUM / LOW)
+    const [byConfRows] = await pool.query(`
+      SELECT
+        sc.confidence,
+        COUNT(*) AS total,
+        SUM(CASE WHEN sc.manual_direction_ok IS NOT NULL AND sc.manual_result IS NOT NULL THEN 1 ELSE 0 END) AS reviewed,
+        SUM(CASE WHEN sc.manual_direction_ok = 1 THEN 1 ELSE 0 END) AS direction_correct,
+        SUM(CASE WHEN sc.manual_result = 'tp1' THEN 1 ELSE 0 END) AS tp1_count,
+        SUM(CASE WHEN sc.manual_result = 'tp2' THEN 1 ELSE 0 END) AS tp2_count,
+        SUM(CASE WHEN sc.manual_result = 'sl' THEN 1 ELSE 0 END) AS sl_count
+      FROM signal_scores sc
+      GROUP BY sc.confidence
+    `);
+
+    const by_confidence = {};
+    for (const r of byConfRows) {
+      by_confidence[r.confidence || 'UNKNOWN'] = {
+        total: Number(r.total),
+        reviewed: Number(r.reviewed),
+        direction_correct: Number(r.direction_correct),
+        tp1_count: Number(r.tp1_count),
+        tp2_count: Number(r.tp2_count),
+        sl_count: Number(r.sl_count),
+      };
+    }
+
     res.json({
       totals: {
         total: Number(totals.total),
@@ -670,6 +696,7 @@ app.get('/api/signals/stats', requireDashKey, async (req, res) => {
         sl_count: Number(totals.sl_count),
       },
       by_source,
+      by_confidence,
       daily,
     });
   } catch (err) {

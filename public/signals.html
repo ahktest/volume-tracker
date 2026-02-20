@@ -138,6 +138,11 @@
     <!-- source_type bazli kirilim -->
   </div>
 
+  <h3 class="dash-title">Confidence Bazli Win Rate</h3>
+  <div class="breakdown-grid" id="confidenceGrid">
+    <!-- HIGH / MEDIUM / LOW kirilim -->
+  </div>
+
   <h3 class="dash-title">Gunluk Detay</h3>
   <div class="table-wrap">
     <table class="daily-table">
@@ -217,6 +222,7 @@ function api(path, opts = {}) {
 // ─── Render Table ───
 function renderTable(rows) {
   const tbody = document.getElementById('scoresBody');
+  // Sadece henuz degerlendirilmemis kayitlari goster
   const needsReview = rows.filter(r => r.manual_direction_ok == null || r.manual_result == null);
 
   if (needsReview.length === 0) {
@@ -225,7 +231,7 @@ function renderTable(rows) {
     document.getElementById('infoBanner').style.display = 'none';
   }
 
-  tbody.innerHTML = rows.map((r, i) => {
+  tbody.innerHTML = needsReview.map((r, i) => {
     const dirClass = r.direction === 'LONG' ? 'dir-long' : 'dir-short';
     const confClass = 'conf-' + (r.confidence || 'low').toLowerCase();
     const srcClass = (r.source_type || '').includes('funding') ? 'badge-funding' : 'badge-normal';
@@ -316,6 +322,7 @@ async function loadDashboard() {
     const stats = await api('/api/signals/stats');
     renderStats(stats);
     renderBreakdown(stats);
+    renderConfidence(stats);
     renderDaily(stats.daily || []);
   } catch (e) {
     console.error('Dashboard hata:', e);
@@ -380,6 +387,31 @@ function renderBreakdown(s) {
       <div class="breakdown-row"><span class="lbl">TP1</span><span class="val green">${d.tp1_count}</span></div>
       <div class="breakdown-row"><span class="lbl">TP2</span><span class="val green">${d.tp2_count}</span></div>
       <div class="breakdown-row"><span class="lbl">SL</span><span class="val red">${d.sl_count}</span></div>
+    </div>`;
+  }).join('');
+}
+
+function renderConfidence(s) {
+  const grid = document.getElementById('confidenceGrid');
+  const levels = s.by_confidence || {};
+  const order = ['HIGH', 'MEDIUM', 'LOW'];
+  const colors = { HIGH: 'green', MEDIUM: 'yellow', LOW: '' };
+
+  grid.innerHTML = order.filter(lv => levels[lv]).map(lv => {
+    const d = levels[lv];
+    const wr = d.reviewed > 0 ? ((d.direction_correct / d.reviewed) * 100).toFixed(1) : '-';
+    const tp1r = d.reviewed > 0 ? ((d.tp1_count / d.reviewed) * 100).toFixed(1) : '-';
+    const tp2r = d.reviewed > 0 ? ((d.tp2_count / d.reviewed) * 100).toFixed(1) : '-';
+    const slr = d.reviewed > 0 ? ((d.sl_count / d.reviewed) * 100).toFixed(1) : '-';
+    return `
+    <div class="breakdown-card">
+      <h4 class="${colors[lv]}">${lv}</h4>
+      <div class="breakdown-row"><span class="lbl">Sinyal</span><span class="val">${d.total}</span></div>
+      <div class="breakdown-row"><span class="lbl">Degerlendirilmis</span><span class="val">${d.reviewed}</span></div>
+      <div class="breakdown-row"><span class="lbl">Win Rate</span><span class="val ${Number(wr) >= 50 ? 'green' : (wr === '-' ? '' : 'red')}">${wr}%</span></div>
+      <div class="breakdown-row"><span class="lbl">TP1</span><span class="val green">${d.tp1_count} (${tp1r}%)</span></div>
+      <div class="breakdown-row"><span class="lbl">TP2</span><span class="val green">${d.tp2_count} (${tp2r}%)</span></div>
+      <div class="breakdown-row"><span class="lbl">SL</span><span class="val red">${d.sl_count} (${slr}%)</span></div>
     </div>`;
   }).join('');
 }
