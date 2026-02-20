@@ -143,6 +143,11 @@
     <!-- HIGH / MEDIUM / LOW kirilim -->
   </div>
 
+  <h3 class="dash-title">Listing Tipi Bazli Win Rate</h3>
+  <div class="breakdown-grid" id="listingGrid">
+    <!-- spot, alpha, futures, spot-futures, alpha-futures -->
+  </div>
+
   <h3 class="dash-title">Gunluk Detay</h3>
   <div class="table-wrap">
     <table class="daily-table">
@@ -323,6 +328,7 @@ async function loadDashboard() {
     renderStats(stats);
     renderBreakdown(stats);
     renderConfidence(stats);
+    renderListing(stats);
     renderDaily(stats.daily || []);
   } catch (e) {
     console.error('Dashboard hata:', e);
@@ -406,6 +412,48 @@ function renderConfidence(s) {
     return `
     <div class="breakdown-card">
       <h4 class="${colors[lv]}">${lv}</h4>
+      <div class="breakdown-row"><span class="lbl">Sinyal</span><span class="val">${d.total}</span></div>
+      <div class="breakdown-row"><span class="lbl">Degerlendirilmis</span><span class="val">${d.reviewed}</span></div>
+      <div class="breakdown-row"><span class="lbl">Win Rate</span><span class="val ${Number(wr) >= 50 ? 'green' : (wr === '-' ? '' : 'red')}">${wr}%</span></div>
+      <div class="breakdown-row"><span class="lbl">TP1</span><span class="val green">${d.tp1_count} (${tp1r}%)</span></div>
+      <div class="breakdown-row"><span class="lbl">TP2</span><span class="val green">${d.tp2_count} (${tp2r}%)</span></div>
+      <div class="breakdown-row"><span class="lbl">SL</span><span class="val red">${d.sl_count} (${slr}%)</span></div>
+    </div>`;
+  }).join('');
+}
+
+function renderListing(s) {
+  const grid = document.getElementById('listingGrid');
+  const types = s.by_listing || {};
+
+  const labels = {
+    'spot-futures': 'Spot & Futures',
+    'alpha-futures': 'Alpha & Futures',
+    'futures': 'Sadece Futures',
+    'spot': 'Sadece Spot',
+    'alpha': 'Sadece Alpha',
+    'unknown': 'Bilinmiyor',
+  };
+  const colors = {
+    'spot-futures': 'blue',
+    'alpha-futures': 'yellow',
+    'futures': '',
+    'unknown': '',
+  };
+
+  // Sinyal sayisina gore sirala
+  const sorted = Object.entries(types).sort((a, b) => b[1].total - a[1].total);
+
+  grid.innerHTML = sorted.map(([key, d]) => {
+    const wr = d.reviewed > 0 ? ((d.direction_correct / d.reviewed) * 100).toFixed(1) : '-';
+    const tp1r = d.reviewed > 0 ? ((d.tp1_count / d.reviewed) * 100).toFixed(1) : '-';
+    const tp2r = d.reviewed > 0 ? ((d.tp2_count / d.reviewed) * 100).toFixed(1) : '-';
+    const slr = d.reviewed > 0 ? ((d.sl_count / d.reviewed) * 100).toFixed(1) : '-';
+    const label = labels[key] || key;
+    const clr = colors[key] || '';
+    return `
+    <div class="breakdown-card">
+      <h4 class="${clr}">${label}</h4>
       <div class="breakdown-row"><span class="lbl">Sinyal</span><span class="val">${d.total}</span></div>
       <div class="breakdown-row"><span class="lbl">Degerlendirilmis</span><span class="val">${d.reviewed}</span></div>
       <div class="breakdown-row"><span class="lbl">Win Rate</span><span class="val ${Number(wr) >= 50 ? 'green' : (wr === '-' ? '' : 'red')}">${wr}%</span></div>

@@ -685,6 +685,33 @@ app.get('/api/signals/stats', requireDashKey, async (req, res) => {
       };
     }
 
+    // 5. Listing type bazli kirilim (spot, alpha, futures, spot-futures, alpha-futures vb.)
+    const [byListingRows] = await pool.query(`
+      SELECT
+        COALESCE(sn.listing_type, 'unknown') AS listing_type,
+        COUNT(*) AS total,
+        SUM(CASE WHEN sc.manual_direction_ok IS NOT NULL AND sc.manual_result IS NOT NULL THEN 1 ELSE 0 END) AS reviewed,
+        SUM(CASE WHEN sc.manual_direction_ok = 1 THEN 1 ELSE 0 END) AS direction_correct,
+        SUM(CASE WHEN sc.manual_result = 'tp1' THEN 1 ELSE 0 END) AS tp1_count,
+        SUM(CASE WHEN sc.manual_result = 'tp2' THEN 1 ELSE 0 END) AS tp2_count,
+        SUM(CASE WHEN sc.manual_result = 'sl' THEN 1 ELSE 0 END) AS sl_count
+      FROM signal_scores sc
+      LEFT JOIN signal_snapshots sn ON sn.id = sc.signal_snapshot_id
+      GROUP BY COALESCE(sn.listing_type, 'unknown')
+    `);
+
+    const by_listing = {};
+    for (const r of byListingRows) {
+      by_listing[r.listing_type] = {
+        total: Number(r.total),
+        reviewed: Number(r.reviewed),
+        direction_correct: Number(r.direction_correct),
+        tp1_count: Number(r.tp1_count),
+        tp2_count: Number(r.tp2_count),
+        sl_count: Number(r.sl_count),
+      };
+    }
+
     res.json({
       totals: {
         total: Number(totals.total),
@@ -697,6 +724,7 @@ app.get('/api/signals/stats', requireDashKey, async (req, res) => {
       },
       by_source,
       by_confidence,
+      by_listing,
       daily,
     });
   } catch (err) {
