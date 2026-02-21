@@ -19,6 +19,12 @@
   .login-box button:hover{background:#1d4ed8}
   .login-error{color:#f87171;font-size:13px;margin-top:8px;display:none}
 
+  /* ─── Nav ─── */
+  .top-nav{background:#111827;border-bottom:1px solid #1f2937;padding:0 16px;display:flex;align-items:center;gap:6px}
+  .top-nav a{color:#9ca3af;text-decoration:none;font-size:13px;padding:12px 16px;border-bottom:2px solid transparent;transition:color .2s,border-color .2s}
+  .top-nav a:hover{color:#e5e7eb}
+  .top-nav a.active{color:#93c5fd;border-bottom-color:#3b82f6;font-weight:600}
+
   /* ─── Layout ─── */
   .container{max-width:1400px;margin:0 auto;padding:20px 16px}
   .header-bar{display:flex;align-items:center;justify-content:space-between;padding:16px 0;border-bottom:1px solid #1f2937;margin-bottom:24px}
@@ -88,6 +94,12 @@
     <div class="login-error" id="loginErr">Parola yanlish</div>
   </div>
 </div>
+
+<!-- ═══════ NAV ═══════ -->
+<nav class="top-nav" id="topNav" style="display:none">
+  <a href="resultworker.html">Futures PNL</a>
+  <a href="signals.html" class="active">Signal Scores</a>
+</nav>
 
 <!-- ═══════ MAIN ═══════ -->
 <div class="container" id="mainApp" style="display:none">
@@ -182,6 +194,7 @@ function doLogin() {
       if (!r.ok) throw new Error();
       document.getElementById('loginOverlay').style.display = 'none';
       document.getElementById('mainApp').style.display = 'block';
+      document.getElementById('topNav').style.display = 'flex';
       sessionStorage.setItem('sig_key', KEY);
       return r.json();
     })
@@ -200,6 +213,7 @@ function doLogout() {
   sessionStorage.removeItem('sig_key');
   KEY = '';
   document.getElementById('mainApp').style.display = 'none';
+  document.getElementById('topNav').style.display = 'none';
   document.getElementById('loginOverlay').style.display = 'flex';
 }
 
