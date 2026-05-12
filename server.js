@@ -732,27 +732,29 @@ app.get('/api/signals/stats', requireDashKey, async (req, res) => {
       };
     }
 
-    // --- 5. Confidence bazli (certain only) ---
-    const [byConfRows] = await pool.query(`
+    // --- 5. Direction bazli (LONG vs SHORT) ---
+    const [byDirRows] = await pool.query(`
       SELECT
-        sc.confidence,
+        so.direction,
         COUNT(*) AS total,
+        SUM(so.is_completed = 1) AS completed,
         SUM(so.direction_correct = 1) AS direction_correct,
         SUM(${winExpr})  AS wins,
         SUM(${lossExpr}) AS losses,
         SUM(so.tp1_hit_ever = 1) AS tp1_hit,
         SUM(so.tp2_hit_ever = 1) AS tp2_hit,
         SUM(so.sl_hit_ever  = 1) AS sl_hit,
-        AVG(so.realized_pnl_pct) AS avg_pnl
+        AVG(so.realized_pnl_pct) AS avg_pnl,
+        SUM(so.realized_pnl_pct) AS total_pnl
       FROM signal_outcomes so
-      JOIN signal_scores sc ON sc.id = so.signal_score_id
       WHERE ${certainWhere}
-      GROUP BY sc.confidence
+      GROUP BY so.direction
     `);
-    const by_confidence = {};
-    for (const r of byConfRows) {
-      by_confidence[r.confidence || 'UNKNOWN'] = {
+    const by_direction = {};
+    for (const r of byDirRows) {
+      by_direction[r.direction] = {
         total: Number(r.total),
+        completed: Number(r.completed || 0),
         direction_correct: Number(r.direction_correct || 0),
         wins: Number(r.wins || 0),
         losses: Number(r.losses || 0),
@@ -760,6 +762,7 @@ app.get('/api/signals/stats', requireDashKey, async (req, res) => {
         tp2_hit: Number(r.tp2_hit || 0),
         sl_hit: Number(r.sl_hit || 0),
         avg_pnl: r.avg_pnl == null ? null : Number(Number(r.avg_pnl).toFixed(2)),
+        total_pnl: r.total_pnl == null ? null : Number(Number(r.total_pnl).toFixed(2)),
       };
     }
 
@@ -860,7 +863,7 @@ app.get('/api/signals/stats', requireDashKey, async (req, res) => {
       },
       by_final_result,
       by_source,
-      by_confidence,
+      by_direction,
       by_listing,
       daily,
     });

@@ -121,8 +121,8 @@
   <h3 class="dash-title">Source Type Bazli (Certain)</h3>
   <div class="breakdown-grid" id="breakdownGrid"></div>
 
-  <h3 class="dash-title">Confidence Bazli (Certain)</h3>
-  <div class="breakdown-grid" id="confidenceGrid"></div>
+  <h3 class="dash-title">Yon Bazli (LONG / SHORT)</h3>
+  <div class="breakdown-grid" id="directionGrid"></div>
 
   <h3 class="dash-title">Listing Tipi Bazli (Certain)</h3>
   <div class="breakdown-grid" id="listingGrid"></div>
@@ -213,7 +213,7 @@ function renderDashboard(stats) {
   renderUncertainStats(stats.uncertain || {});
   renderFinalResult(stats.by_final_result || {});
   renderBreakdown(stats.by_source || {});
-  renderConfidence(stats.by_confidence || {});
+  renderDirection(stats.by_direction || {});
   renderListing(stats.by_listing || {});
   renderDaily(stats.daily || []);
 }
@@ -345,26 +345,35 @@ function renderBreakdown(sources) {
   }).join('');
 }
 
-function renderConfidence(levels) {
-  const grid = document.getElementById('confidenceGrid');
-  const order = ['HIGH', 'MEDIUM', 'LOW'];
-  const colors = { HIGH: 'green', MEDIUM: 'yellow', LOW: '' };
+function renderDirection(dirs) {
+  const grid = document.getElementById('directionGrid');
+  const order = ['LONG', 'SHORT'];
+  const colors = { LONG: 'green', SHORT: 'red' };
 
-  grid.innerHTML = order.filter(lv => levels[lv]).map(lv => {
-    const d = levels[lv];
-    const wr  = d.total > 0 ? ((d.direction_correct / d.total) * 100).toFixed(1) : '-';
-    const wnr = d.total > 0 ? ((d.wins / d.total) * 100).toFixed(1) : '-';
+  const cards = order.filter(k => dirs[k]).map(k => {
+    const d = dirs[k];
+    const base = d.completed || d.total;   // oranlar tamamlanan uzerinden
+    const dr  = base > 0 ? ((d.direction_correct / base) * 100).toFixed(1) : '-';
+    const wnr = base > 0 ? ((d.wins / base) * 100).toFixed(1) : '-';
+    const tp1r = base > 0 ? ((d.tp1_hit / base) * 100).toFixed(1) : '-';
+    const tp2r = base > 0 ? ((d.tp2_hit / base) * 100).toFixed(1) : '-';
+    const slr  = base > 0 ? ((d.sl_hit  / base) * 100).toFixed(1) : '-';
     return `
     <div class="breakdown-card">
-      <h4 class="${colors[lv]}">${lv}</h4>
-      <div class="breakdown-row"><span class="lbl">Toplam</span><span class="val">${d.total}</span></div>
-      <div class="breakdown-row"><span class="lbl">Yon Basarisi</span><span class="val ${Number(wr) >= 50 ? 'green' : (wr === '-' ? '' : 'red')}">${wr}%</span></div>
+      <h4 class="${colors[k]}">${k}</h4>
+      <div class="breakdown-row"><span class="lbl">Toplam</span><span class="val">${d.total} <span style="color:#6b7280;font-weight:400">(${d.completed} tamam)</span></span></div>
+      <div class="breakdown-row"><span class="lbl">Yon Basarisi</span><span class="val ${Number(dr) >= 50 ? 'green' : (dr === '-' ? '' : 'red')}">${dr}%</span></div>
       <div class="breakdown-row"><span class="lbl">Win Rate</span><span class="val ${Number(wnr) >= 50 ? 'green' : (wnr === '-' ? '' : 'red')}">${wnr}%</span></div>
       <div class="breakdown-row"><span class="lbl">Win / Loss</span><span class="val"><span class="green">${d.wins}</span> / <span class="red">${d.losses}</span></span></div>
-      <div class="breakdown-row"><span class="lbl">TP1 / TP2 / SL</span><span class="val"><span class="green">${d.tp1_hit}</span> / <span class="green">${d.tp2_hit}</span> / <span class="red">${d.sl_hit}</span></span></div>
+      <div class="breakdown-row"><span class="lbl">TP1 Hit</span><span class="val green">${d.tp1_hit} <span style="color:#6b7280;font-weight:400">(${tp1r}%)</span></span></div>
+      <div class="breakdown-row"><span class="lbl">TP2 Hit</span><span class="val green">${d.tp2_hit} <span style="color:#6b7280;font-weight:400">(${tp2r}%)</span></span></div>
+      <div class="breakdown-row"><span class="lbl">SL Hit</span><span class="val red">${d.sl_hit} <span style="color:#6b7280;font-weight:400">(${slr}%)</span></span></div>
       <div class="breakdown-row"><span class="lbl">Avg PNL</span><span class="val ${(d.avg_pnl || 0) >= 0 ? 'green' : 'red'}">${fmtPct(d.avg_pnl)}</span></div>
+      <div class="breakdown-row"><span class="lbl">Toplam PNL</span><span class="val ${(d.total_pnl || 0) >= 0 ? 'green' : 'red'}">${fmtPct(d.total_pnl)}</span></div>
     </div>`;
   }).join('');
+
+  grid.innerHTML = cards || `<div class="breakdown-card" style="color:#6b7280">Henuz LONG/SHORT sinyali yok</div>`;
 }
 
 function renderListing(types) {
