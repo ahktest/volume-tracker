@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Tum Sinyaller</title>
+<link rel="icon" href="favicon.png" type="image/x-icon"/>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Segoe UI',Tahoma,sans-serif;background:#0b0f14;color:#e5e7eb;min-height:100vh}
+
+  .login-overlay{position:fixed;inset:0;background:#0b0f14;display:flex;align-items:center;justify-content:center;z-index:999}
+  .login-box{background:#111827;padding:40px 36px;border-radius:14px;text-align:center;min-width:320px}
+  .login-box h2{margin-bottom:18px;font-size:1.3rem;color:#93c5fd}
+  .login-box input{width:100%;padding:12px 14px;border:1px solid #374151;border-radius:8px;background:#1f2937;color:#e5e7eb;font-size:15px;outline:none;margin-bottom:14px}
+  .login-box input:focus{border-color:#60a5fa}
+  .login-box button{width:100%;padding:12px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:15px;cursor:pointer;font-weight:600}
+  .login-box button:hover{background:#1d4ed8}
+  .login-error{color:#f87171;font-size:13px;margin-top:8px;display:none}
+
+  .top-nav{background:#111827;border-bottom:1px solid #1f2937;padding:0 16px;display:flex;align-items:center;gap:6px}
+  .top-nav a{color:#9ca3af;text-decoration:none;font-size:13px;padding:12px 16px;border-bottom:2px solid transparent;transition:color .2s,border-color .2s}
+  .top-nav a:hover{color:#e5e7eb}
+  .top-nav a.active{color:#93c5fd;border-bottom-color:#3b82f6;font-weight:600}
+
+  .container{max-width:1500px;margin:0 auto;padding:20px 16px}
+  .header-bar{display:flex;align-items:center;justify-content:space-between;padding:16px 0;border-bottom:1px solid #1f2937;margin-bottom:20px;flex-wrap:wrap;gap:10px}
+  .header-bar h1{font-size:1.3rem;color:#93c5fd}
+  .header-bar .right{display:flex;gap:10px;align-items:center}
+  .header-bar .logout{padding:6px 14px;background:#374151;color:#9ca3af;border:none;border-radius:6px;cursor:pointer;font-size:13px}
+  .header-bar .logout:hover{background:#4b5563;color:#e5e7eb}
+  .header-bar .back-btn{padding:6px 14px;background:#1e3a5f;color:#93c5fd;border:none;border-radius:6px;cursor:pointer;font-size:13px;text-decoration:none}
+  .header-bar .back-btn:hover{background:#1d4ed8;color:#fff}
+
+  .filter-bar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+  .filter-bar button{background:#1f2937;color:#9ca3af;border:1px solid #374151;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer}
+  .filter-bar button.active{background:#1e3a5f;color:#93c5fd;border-color:#3b82f6}
+  .filter-bar button:hover{color:#e5e7eb}
+  .filter-bar .info{color:#6b7280;font-size:12px;margin-left:auto}
+
+  .table-wrap{overflow-x:auto;margin-bottom:20px}
+  table{width:100%;border-collapse:collapse;background:#111827;border-radius:10px;overflow:hidden;font-size:13px}
+  th{background:#0f172a;color:#94a3b8;font-weight:600;padding:10px 12px;text-align:left;white-space:nowrap;position:sticky;top:0}
+  td{padding:9px 12px;border-bottom:1px solid #1f2937;vertical-align:middle;white-space:nowrap}
+  tr:hover td{background:#0d1320}
+
+  .dir-long{color:#34d399;font-weight:700}
+  .dir-short{color:#f87171;font-weight:700}
+  .dir-uncertain{color:#9ca3af;font-weight:700}
+  .conf-high{color:#34d399}.conf-medium{color:#fbbf24}.conf-low{color:#9ca3af}
+
+  .badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600}
+  .badge-normal{background:#1e3a5f;color:#60a5fa}
+  .badge-funding{background:#3b1f2b;color:#fb923c}
+  .badge-win{background:#064e3b;color:#6ee7b7}
+  .badge-loss{background:#7f1d1d;color:#fca5a5}
+  .badge-neutral{background:#374151;color:#9ca3af}
+  .badge-pending{background:#1f2937;color:#9ca3af;border:1px dashed #374151}
+  .badge-state-open{background:#1f2937;color:#fbbf24}
+  .badge-state-half{background:#1e3a5f;color:#93c5fd}
+  .badge-state-closed{background:#0f172a;color:#9ca3af}
+
+  .pnl-pos{color:#34d399;font-weight:600}
+  .pnl-neg{color:#f87171;font-weight:600}
+
+  /* Pagination */
+  .pager{display:flex;align-items:center;justify-content:center;gap:8px;margin:20px 0 40px;flex-wrap:wrap}
+  .pager button{background:#1f2937;color:#e5e7eb;border:1px solid #374151;border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer;min-width:36px}
+  .pager button:hover:not(:disabled){background:#374151}
+  .pager button:disabled{opacity:.35;cursor:default}
+  .pager button.active{background:#1e3a5f;color:#93c5fd;border-color:#3b82f6}
+  .pager .ellipsis{color:#6b7280;padding:0 4px}
+  .pager .info{color:#9ca3af;font-size:12px;margin:0 10px}
+
+  .empty{padding:40px;text-align:center;color:#6b7280}
+</style>
+</head>
+<body>
+
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-box">
+    <h2>Tum Sinyaller</h2>
+    <input type="password" id="passInput" placeholder="Parola" autocomplete="off"/>
+    <button onclick="doLogin()">Gir</button>
+    <div class="login-error" id="loginErr">Parola yanlish</div>
+  </div>
+</div>
+
+<nav class="top-nav" id="topNav" style="display:none">
+  <a href="resultworker.html">Futures PNL</a>
+  <a href="signals.html">Signal Scores</a>
+  <a href="signals-list.html" class="active">Tum Sinyaller</a>
+</nav>
+
+<div class="container" id="mainApp" style="display:none">
+
+  <div class="header-bar">
+    <h1>Tum Sinyaller</h1>
+    <div class="right">
+      <a href="signals.html" class="back-btn">← Dashboard</a>
+      <button class="logout" onclick="doLogout()">Logout</button>
+    </div>
+  </div>
+
+  <div class="filter-bar" id="filterBar">
+    <button data-filter="all"       class="active">Tumu</button>
+    <button data-filter="certain"   >Certain (LONG/SHORT)</button>
+    <button data-filter="uncertain" >Uncertain</button>
+    <button data-filter="open"      >Acik (Pending)</button>
+    <button data-filter="completed" >Tamamlanmis</button>
+    <span class="info" id="totalInfo"></span>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Symbol</th>
+          <th>Source</th>
+          <th>Score</th>
+          <th>Direction</th>
+          <th>Confidence</th>
+          <th>Entry</th>
+          <th>TP1</th>
+          <th>TP2</th>
+          <th>SL</th>
+          <th>Tarih</th>
+          <th>Sonuc</th>
+          <th>PNL %</th>
+          <th>State</th>
+          <th>Exit</th>
+        </tr>
+      </thead>
+      <tbody id="scoresBody"></tbody>
+    </table>
+  </div>
+
+  <div class="pager" id="pager"></div>
+</div>
+
+<script>
+const API_BASE = '';
+const PAGE_SIZE = 100;
+let KEY = '';
+let CURRENT_FILTER = 'all';
+let CURRENT_PAGE = 1;
+let TOTAL = 0;
+
+// Sayfa modu: 'list' (sayfalama var) veya 'day' (tarih sabit, sayfalama yok)
+// signals-day.html bu degiskenleri override edebilir
+window.PAGE_MODE = window.PAGE_MODE || 'list';
+window.FIXED_DATE = window.FIXED_DATE || null;
+
+function doLogin() {
+  const v = document.getElementById('passInput').value.trim();
+  if (!v) return;
+  KEY = v;
+  loadPage().then(ok => {
+    if (!ok) {
+      const el = document.getElementById('loginErr');
+      el.style.display = 'block';
+      setTimeout(() => el.style.display = 'none', 2500);
+      return;
+    }
+    document.getElementById('loginOverlay').style.display = 'none';
+    document.getElementById('mainApp').style.display = 'block';
+    document.getElementById('topNav').style.display = 'flex';
+    sessionStorage.setItem('sig_key', KEY);
+  });
+}
+
+function doLogout() {
+  sessionStorage.removeItem('sig_key');
+  KEY = '';
+  document.getElementById('mainApp').style.display = 'none';
+  document.getElementById('topNav').style.display = 'none';
+  document.getElementById('loginOverlay').style.display = 'flex';
+}
+
+(function() {
+  const saved = sessionStorage.getItem('sig_key');
+  if (saved) {
+    KEY = saved;
+    document.getElementById('passInput').value = saved;
+    doLogin();
+  }
+  document.getElementById('passInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doLogin();
+  });
+
+  document.getElementById('filterBar').addEventListener('click', e => {
+    if (e.target.tagName !== 'BUTTON') return;
+    CURRENT_FILTER = e.target.dataset.filter;
+    CURRENT_PAGE = 1;
+    [...document.querySelectorAll('#filterBar button')].forEach(b => b.classList.toggle('active', b === e.target));
+    loadPage();
+  });
+})();
+
+async function loadPage() {
+  try {
+    const params = new URLSearchParams();
+    params.set('limit', PAGE_SIZE);
+    params.set('offset', (CURRENT_PAGE - 1) * PAGE_SIZE);
+    if (CURRENT_FILTER && CURRENT_FILTER !== 'all') params.set('filter', CURRENT_FILTER);
+    if (window.FIXED_DATE) params.set('date', window.FIXED_DATE);
+
+    const r = await fetch(API_BASE + '/api/signals/scores?' + params.toString(), {
+      headers: { 'x-dash-key': KEY }
+    });
+    if (!r.ok) return false;
+    const data = await r.json();
+    TOTAL = data.total || 0;
+    renderTable(data.rows || []);
+    renderPager();
+    renderInfo();
+    return true;
+  } catch (e) {
+    console.error(e);
+    return false;
+  }
+}
+
+function fmt(v) {
+  if (v == null) return '-';
+  const n = Number(v);
+  if (!Number.isFinite(n)) return '-';
+  return n < 1 ? n.toPrecision(5) : n.toFixed(2);
+}
+function fmtPct(v) {
+  if (v == null) return '-';
+  const n = Number(v);
+  if (!Number.isFinite(n)) return '-';
+  return (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
+}
+function pnlClass(v) {
+  if (v == null) return '';
+  const n = Number(v);
+  if (!Number.isFinite(n)) return '';
+  return n >= 0 ? 'pnl-pos' : 'pnl-neg';
+}
+function dirClass(d) {
+  if (d === 'LONG') return 'dir-long';
+  if (d === 'SHORT') return 'dir-short';
+  return 'dir-uncertain';
+}
+function finalResultBadge(fr, isCompleted) {
+  if (!fr) return `<span class="badge badge-pending">${isCompleted ? 'no_data' : 'pending'}</span>`;
+  const winSet  = new Set(['dir_correct_tp1','dir_correct_tp2']);
+  const lossSet = new Set(['dir_correct_sl','dir_wrong_tp1','dir_wrong_sl']);
+  let cls = 'badge-neutral';
+  if (winSet.has(fr)) cls = 'badge-win';
+  else if (lossSet.has(fr)) cls = 'badge-loss';
+  const labels = {
+    dir_correct_tp1: 'WIN · TP1',
+    dir_correct_tp2: 'WIN · TP2',
+    dir_correct_sl:  'LOSS · SL',
+    dir_wrong_tp1:   'LOSS · ters TP1',
+    dir_wrong_sl:    'LOSS · ters SL',
+    neutral:         'NEUTRAL',
+  };
+  return `<span class="badge ${cls}">${labels[fr] || fr}</span>`;
+}
+function stateBadge(st) {
+  if (!st || st === 'OPEN') return `<span class="badge badge-state-open">OPEN</span>`;
+  if (st === 'TP1_HIT_HALFCLOSED') return `<span class="badge badge-state-half">TP1·HALF</span>`;
+  if (st === 'CLOSED') return `<span class="badge badge-state-closed">CLOSED</span>`;
+  return `<span class="badge badge-state-open">${st}</span>`;
+}
+
+function renderTable(rows) {
+  const tbody = document.getElementById('scoresBody');
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="15" class="empty">Kayit yok</td></tr>`;
+    return;
+  }
+  const base = (CURRENT_PAGE - 1) * PAGE_SIZE;
+  tbody.innerHTML = rows.map((r, i) => {
+    const srcClass = (r.source_type || '').includes('funding') ? 'badge-funding' : 'badge-normal';
+    const srcLabel = (r.source_type || 'normal');
+    const confClass = 'conf-' + (r.confidence || 'low').toLowerCase();
+    const ts = r.created_at ? new Date(r.created_at).toLocaleString('tr-TR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '-';
+    return `<tr>
+      <td>${base + i + 1}</td>
+      <td><strong>${r.symbol}</strong></td>
+      <td><span class="badge ${srcClass}">${srcLabel}</span></td>
+      <td>${r.score}</td>
+      <td class="${dirClass(r.direction)}">${r.direction}</td>
+      <td class="${confClass}">${r.confidence || '-'}</td>
+      <td>${fmt(r.entry_price)}</td>
+      <td>${fmt(r.tp1)}</td>
+      <td>${fmt(r.tp2)}</td>
+      <td>${fmt(r.sl)}</td>
+      <td>${ts}</td>
+      <td>${finalResultBadge(r.final_result, r.is_completed)}</td>
+      <td class="${pnlClass(r.realized_pnl_pct)}">${fmtPct(r.realized_pnl_pct)}</td>
+      <td>${stateBadge(r.final_state)}</td>
+      <td>${r.exit_reason || '-'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderInfo() {
+  const info = document.getElementById('totalInfo');
+  if (!TOTAL) { info.textContent = '0 kayit'; return; }
+  const from = (CURRENT_PAGE - 1) * PAGE_SIZE + 1;
+  const to = Math.min(CURRENT_PAGE * PAGE_SIZE, TOTAL);
+  info.textContent = `${from}-${to} / ${TOTAL} kayit`;
+}
+
+function renderPager() {
+  const pager = document.getElementById('pager');
+  if (window.PAGE_MODE !== 'list') { pager.innerHTML = ''; return; }
+
+  const totalPages = Math.max(1, Math.ceil(TOTAL / PAGE_SIZE));
+  if (totalPages <= 1) { pager.innerHTML = ''; return; }
+
+  // Sayfa numaralarini akilli sec: 1, ..., cur-1, cur, cur+1, ..., last
+  const pages = [];
+  const cur = CURRENT_PAGE;
+  const add = (p) => { if (!pages.includes(p) && p >= 1 && p <= totalPages) pages.push(p); };
+  add(1); add(2);
+  add(cur - 1); add(cur); add(cur + 1);
+  add(totalPages - 1); add(totalPages);
+  pages.sort((a, b) => a - b);
+
+  let html = '';
+  html += `<button ${cur === 1 ? 'disabled' : ''} onclick="goPage(${cur - 1})">«</button>`;
+  let prev = 0;
+  for (const p of pages) {
+    if (prev && p > prev + 1) html += `<span class="ellipsis">…</span>`;
+    html += `<button class="${p === cur ? 'active' : ''}" onclick="goPage(${p})">${p}</button>`;
+    prev = p;
+  }
+  html += `<button ${cur === totalPages ? 'disabled' : ''} onclick="goPage(${cur + 1})">»</button>`;
+  html += `<span class="info">Sayfa ${cur} / ${totalPages}</span>`;
+  pager.innerHTML = html;
+}
+
+function goPage(p) {
+  CURRENT_PAGE = p;
+  loadPage();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+</script>
+</body>
+</html>

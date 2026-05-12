@@ -29,43 +29,16 @@
   .container{max-width:1400px;margin:0 auto;padding:20px 16px}
   .header-bar{display:flex;align-items:center;justify-content:space-between;padding:16px 0;border-bottom:1px solid #1f2937;margin-bottom:24px}
   .header-bar h1{font-size:1.4rem;color:#93c5fd}
+  .header-bar .right{display:flex;gap:10px;align-items:center}
   .header-bar .logout{padding:6px 14px;background:#374151;color:#9ca3af;border:none;border-radius:6px;cursor:pointer;font-size:13px}
   .header-bar .logout:hover{background:#4b5563;color:#e5e7eb}
-
-  /* ─── Filter ─── */
-  .filter-bar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
-  .filter-bar button{background:#1f2937;color:#9ca3af;border:1px solid #374151;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer}
-  .filter-bar button.active{background:#1e3a5f;color:#93c5fd;border-color:#3b82f6}
-  .filter-bar button:hover{color:#e5e7eb}
-
-  /* ─── Table ─── */
-  .table-wrap{overflow-x:auto;margin-bottom:40px}
-  table{width:100%;border-collapse:collapse;background:#111827;border-radius:10px;overflow:hidden;font-size:13px}
-  th{background:#0f172a;color:#94a3b8;font-weight:600;padding:10px 12px;text-align:left;white-space:nowrap;position:sticky;top:0}
-  td{padding:9px 12px;border-bottom:1px solid #1f2937;vertical-align:middle;white-space:nowrap}
-  tr:hover td{background:#0d1320}
-
-  .dir-long{color:#34d399;font-weight:700}
-  .dir-short{color:#f87171;font-weight:700}
-  .dir-uncertain{color:#9ca3af;font-weight:700}
-  .conf-high{color:#34d399}.conf-medium{color:#fbbf24}.conf-low{color:#9ca3af}
-
-  .badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600}
-  .badge-normal{background:#1e3a5f;color:#60a5fa}
-  .badge-funding{background:#3b1f2b;color:#fb923c}
-  .badge-win{background:#064e3b;color:#6ee7b7}
-  .badge-loss{background:#7f1d1d;color:#fca5a5}
-  .badge-neutral{background:#374151;color:#9ca3af}
-  .badge-pending{background:#1f2937;color:#9ca3af;border:1px dashed #374151}
-  .badge-state-open{background:#1f2937;color:#fbbf24}
-  .badge-state-half{background:#1e3a5f;color:#93c5fd}
-  .badge-state-closed{background:#0f172a;color:#9ca3af}
-
-  .pnl-pos{color:#34d399;font-weight:600}
-  .pnl-neg{color:#f87171;font-weight:600}
+  .header-bar .link-btn{padding:6px 14px;background:#1e3a5f;color:#93c5fd;border:none;border-radius:6px;cursor:pointer;font-size:13px;text-decoration:none}
+  .header-bar .link-btn:hover{background:#1d4ed8;color:#fff}
 
   /* ─── Dashboard ─── */
-  .dash-title{font-size:1.2rem;color:#93c5fd;margin:30px 0 16px;padding-bottom:8px;border-bottom:1px solid #1f2937}
+  .dash-title{font-size:1.2rem;color:#93c5fd;margin:30px 0 16px;padding-bottom:8px;border-bottom:1px solid #1f2937;display:flex;align-items:center;justify-content:space-between}
+  .dash-title .link-btn{font-size:12px;padding:5px 12px;background:#1e3a5f;color:#93c5fd;text-decoration:none;border-radius:6px;font-weight:600}
+  .dash-title .link-btn:hover{background:#1d4ed8;color:#fff}
   .dash-section-title{font-size:1.05rem;color:#e5e7eb;margin:24px 0 12px;display:flex;align-items:center;gap:10px}
   .dash-section-title .pill{font-size:11px;padding:2px 10px;border-radius:10px;font-weight:600}
   .pill-certain{background:#064e3b;color:#6ee7b7}
@@ -84,9 +57,17 @@
   .breakdown-row{display:flex;justify-content:space-between;padding:4px 0;font-size:13px;border-bottom:1px solid #1a2332}
   .breakdown-row .lbl{color:#9ca3af}.breakdown-row .val{font-weight:600}
 
+  .pnl-pos{color:#34d399;font-weight:600}
+  .pnl-neg{color:#f87171;font-weight:600}
+
+  .table-wrap{overflow-x:auto;margin-bottom:40px}
   .daily-table{width:100%;border-collapse:collapse;background:#111827;border-radius:10px;overflow:hidden;font-size:13px;margin-top:12px}
   .daily-table th{background:#0f172a;color:#94a3b8;font-weight:600;padding:8px 12px;text-align:left}
   .daily-table td{padding:8px 12px;border-bottom:1px solid #1f2937}
+  .daily-table tbody tr{cursor:pointer;transition:background .15s}
+  .daily-table tbody tr:hover td{background:#1a2332}
+  .daily-table tbody tr:hover .date-link{color:#93c5fd;text-decoration:underline}
+  .date-link{color:#60a5fa;font-weight:600}
 
   /* ─── Responsive ─── */
   @media(max-width:768px){
@@ -117,46 +98,14 @@
 <div class="container" id="mainApp" style="display:none">
 
   <div class="header-bar">
-    <h1>Signal Scores</h1>
-    <button class="logout" onclick="doLogout()">Logout</button>
-  </div>
-
-  <!-- ═══════ TABLE ═══════ -->
-  <div class="filter-bar" id="filterBar">
-    <button data-filter="all"       class="active">Tumu</button>
-    <button data-filter="certain"   >Certain (LONG/SHORT)</button>
-    <button data-filter="uncertain" >Uncertain</button>
-    <button data-filter="open"      >Acik (Pending)</button>
-    <button data-filter="completed" >Tamamlanmis</button>
-  </div>
-
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Symbol</th>
-          <th>Source</th>
-          <th>Score</th>
-          <th>Direction</th>
-          <th>Confidence</th>
-          <th>Entry</th>
-          <th>TP1</th>
-          <th>TP2</th>
-          <th>SL</th>
-          <th>Tarih</th>
-          <th>Sonuc</th>
-          <th>PNL %</th>
-          <th>State</th>
-          <th>Exit</th>
-        </tr>
-      </thead>
-      <tbody id="scoresBody"></tbody>
-    </table>
+    <h1>Signal Scores · Dashboard</h1>
+    <div class="right">
+      <a href="signals-list.html" class="link-btn">Tum Sinyaller →</a>
+      <button class="logout" onclick="doLogout()">Logout</button>
+    </div>
   </div>
 
   <!-- ═══════ DASHBOARD ═══════ -->
-  <h3 class="dash-title">Dashboard</h3>
 
   <!-- CERTAIN -->
   <div class="dash-section-title">Certain Sinyaller <span class="pill pill-certain">LONG / SHORT</span></div>
@@ -178,7 +127,10 @@
   <h3 class="dash-title">Listing Tipi Bazli (Certain)</h3>
   <div class="breakdown-grid" id="listingGrid"></div>
 
-  <h3 class="dash-title">Gunluk Detay</h3>
+  <h3 class="dash-title">
+    Gunluk Detay
+    <a href="signals-list.html" class="link-btn">Tum Sinyaller →</a>
+  </h3>
   <div class="table-wrap">
     <table class="daily-table">
       <thead>
@@ -202,15 +154,12 @@
 <script>
 const API_BASE = '';
 let KEY = '';
-let ALL_ROWS = [];
-let CURRENT_FILTER = 'all';
 
-// ─── Login ───
 function doLogin() {
   const v = document.getElementById('passInput').value.trim();
   if (!v) return;
   KEY = v;
-  fetch(API_BASE + '/api/signals/scores', { headers: { 'x-dash-key': KEY } })
+  fetch(API_BASE + '/api/signals/stats', { headers: { 'x-dash-key': KEY } })
     .then(r => {
       if (!r.ok) throw new Error();
       document.getElementById('loginOverlay').style.display = 'none';
@@ -219,11 +168,7 @@ function doLogin() {
       sessionStorage.setItem('sig_key', KEY);
       return r.json();
     })
-    .then(data => {
-      ALL_ROWS = data;
-      renderTable();
-      loadDashboard();
-    })
+    .then(stats => renderDashboard(stats))
     .catch(() => {
       const el = document.getElementById('loginErr');
       el.style.display = 'block';
@@ -239,7 +184,6 @@ function doLogout() {
   document.getElementById('loginOverlay').style.display = 'flex';
 }
 
-// Auto-login
 (function() {
   const saved = sessionStorage.getItem('sig_key');
   if (saved) {
@@ -250,31 +194,7 @@ function doLogout() {
   document.getElementById('passInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') doLogin();
   });
-
-  // Filter buttons
-  document.getElementById('filterBar').addEventListener('click', e => {
-    if (e.target.tagName !== 'BUTTON') return;
-    CURRENT_FILTER = e.target.dataset.filter;
-    [...document.querySelectorAll('#filterBar button')].forEach(b => b.classList.toggle('active', b === e.target));
-    renderTable();
-  });
 })();
-
-// ─── API helpers ───
-function api(path, opts = {}) {
-  return fetch(API_BASE + path, {
-    ...opts,
-    headers: { 'x-dash-key': KEY, 'Content-Type': 'application/json', ...(opts.headers || {}) },
-  }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
-}
-
-// ─── Helpers ───
-function fmt(v) {
-  if (v == null) return '-';
-  const n = Number(v);
-  if (!Number.isFinite(n)) return '-';
-  return n < 1 ? n.toPrecision(5) : n.toFixed(2);
-}
 
 function fmtPct(v) {
   if (v == null) return '-';
@@ -283,110 +203,19 @@ function fmtPct(v) {
   return (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
 }
 
-function pnlClass(v) {
-  if (v == null) return '';
-  const n = Number(v);
-  if (!Number.isFinite(n)) return '';
-  return n >= 0 ? 'pnl-pos' : 'pnl-neg';
-}
-
-// final_result -> badge etiketi + tipi
-function finalResultBadge(fr, isCompleted) {
-  if (!fr) {
-    return `<span class="badge badge-pending">${isCompleted ? 'no_data' : 'pending'}</span>`;
-  }
-  const winSet  = new Set(['dir_correct_tp1','dir_correct_tp2']);
-  const lossSet = new Set(['dir_correct_sl','dir_wrong_tp1','dir_wrong_sl']);
-  let cls = 'badge-neutral';
-  if (winSet.has(fr)) cls = 'badge-win';
-  else if (lossSet.has(fr)) cls = 'badge-loss';
-  // okunabilir label
-  const labels = {
-    dir_correct_tp1: 'WIN · TP1',
-    dir_correct_tp2: 'WIN · TP2',
-    dir_correct_sl:  'LOSS · SL',
-    dir_wrong_tp1:   'LOSS · ters TP1',
-    dir_wrong_sl:    'LOSS · ters SL',
-    neutral:         'NEUTRAL',
-  };
-  return `<span class="badge ${cls}">${labels[fr] || fr}</span>`;
-}
-
-function stateBadge(st) {
-  if (!st || st === 'OPEN') return `<span class="badge badge-state-open">OPEN</span>`;
-  if (st === 'TP1_HIT_HALFCLOSED') return `<span class="badge badge-state-half">TP1·HALF</span>`;
-  if (st === 'CLOSED') return `<span class="badge badge-state-closed">CLOSED</span>`;
-  return `<span class="badge badge-state-open">${st}</span>`;
-}
-
-function dirClass(d) {
-  if (d === 'LONG') return 'dir-long';
-  if (d === 'SHORT') return 'dir-short';
-  return 'dir-uncertain';
-}
-
-// ─── Render Table ───
-function filteredRows() {
-  return ALL_ROWS.filter(r => {
-    switch (CURRENT_FILTER) {
-      case 'certain':   return r.direction === 'LONG' || r.direction === 'SHORT';
-      case 'uncertain': return r.direction === 'UNCERTAIN';
-      case 'open':      return r.is_completed === 0 || r.is_completed == null;
-      case 'completed': return r.is_completed === 1;
-      default:          return true;
-    }
-  });
-}
-
-function renderTable() {
-  const tbody = document.getElementById('scoresBody');
-  const rows = filteredRows();
-
-  tbody.innerHTML = rows.map((r, i) => {
-    const srcClass = (r.source_type || '').includes('funding') ? 'badge-funding' : 'badge-normal';
-    const srcLabel = (r.source_type || 'normal');
-    const confClass = 'conf-' + (r.confidence || 'low').toLowerCase();
-    const ts = r.created_at ? new Date(r.created_at).toLocaleString('tr-TR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '-';
-
-    return `<tr>
-      <td>${i + 1}</td>
-      <td><strong>${r.symbol}</strong></td>
-      <td><span class="badge ${srcClass}">${srcLabel}</span></td>
-      <td>${r.score}</td>
-      <td class="${dirClass(r.direction)}">${r.direction}</td>
-      <td class="${confClass}">${r.confidence || '-'}</td>
-      <td>${fmt(r.entry_price)}</td>
-      <td>${fmt(r.tp1)}</td>
-      <td>${fmt(r.tp2)}</td>
-      <td>${fmt(r.sl)}</td>
-      <td>${ts}</td>
-      <td>${finalResultBadge(r.final_result, r.is_completed)}</td>
-      <td class="${pnlClass(r.realized_pnl_pct)}">${fmtPct(r.realized_pnl_pct)}</td>
-      <td>${stateBadge(r.final_state)}</td>
-      <td>${r.exit_reason || '-'}</td>
-    </tr>`;
-  }).join('');
-}
-
-// ─── Dashboard ───
-async function loadDashboard() {
-  try {
-    const stats = await api('/api/signals/stats');
-    renderCertainStats(stats.certain || {});
-    renderUncertainStats(stats.uncertain || {});
-    renderFinalResult(stats.by_final_result || {});
-    renderBreakdown(stats.by_source || {});
-    renderConfidence(stats.by_confidence || {});
-    renderListing(stats.by_listing || {});
-    renderDaily(stats.daily || []);
-  } catch (e) {
-    console.error('Dashboard hata:', e);
-  }
-}
-
 function pct(num, den) {
   if (!den) return '-';
   return ((num / den) * 100).toFixed(1) + '%';
+}
+
+function renderDashboard(stats) {
+  renderCertainStats(stats.certain || {});
+  renderUncertainStats(stats.uncertain || {});
+  renderFinalResult(stats.by_final_result || {});
+  renderBreakdown(stats.by_source || {});
+  renderConfidence(stats.by_confidence || {});
+  renderListing(stats.by_listing || {});
+  renderDaily(stats.daily || []);
 }
 
 function renderCertainStats(c) {
@@ -440,9 +269,6 @@ function renderCertainStats(c) {
 
 function renderUncertainStats(u) {
   const grid = document.getElementById('uncertainStats');
-  const tp1r = pct(u.tp1_hit, u.completed);
-  const slr  = pct(u.sl_hit, u.completed);
-
   grid.innerHTML = `
     <div class="stat-card">
       <div class="label">Toplam Sinyal</div>
@@ -456,7 +282,7 @@ function renderUncertainStats(u) {
     </div>
     <div class="stat-card">
       <div class="label">TP1 Seviyesi</div>
-      <div class="value green">${tp1r}</div>
+      <div class="value green">${pct(u.tp1_hit, u.completed)}</div>
       <div class="sub">${u.tp1_hit || 0} kez ulasti</div>
     </div>
     <div class="stat-card">
@@ -466,7 +292,7 @@ function renderUncertainStats(u) {
     </div>
     <div class="stat-card">
       <div class="label">SL Seviyesi</div>
-      <div class="value red">${slr}</div>
+      <div class="value red">${pct(u.sl_hit, u.completed)}</div>
       <div class="sub">${u.sl_hit || 0} kez ulasti</div>
     </div>
   `;
@@ -578,14 +404,29 @@ function renderListing(types) {
   }).join('');
 }
 
+function toIsoDate(d) {
+  // d olabilir: Date objesi veya MySQL'den gelen 'YYYY-MM-DD' veya ISO string
+  if (typeof d === 'string') {
+    // ISO formatinda ise sadece tarih kismini al
+    const m = d.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (m) return m[1];
+  }
+  const dt = new Date(d);
+  const y = dt.getFullYear();
+  const mo = String(dt.getMonth() + 1).padStart(2, '0');
+  const da = String(dt.getDate()).padStart(2, '0');
+  return `${y}-${mo}-${da}`;
+}
+
 function renderDaily(days) {
   const tbody = document.getElementById('dailyBody');
   tbody.innerHTML = days.map(d => {
     const wr = d.completed > 0 ? ((d.wins / d.completed) * 100).toFixed(1) + '%' : '-';
     const wrClass = parseFloat(wr) >= 50 ? 'green' : (wr === '-' ? '' : 'red');
+    const iso = toIsoDate(d.date);
     const dateStr = new Date(d.date).toLocaleDateString('tr-TR', { day:'2-digit', month:'2-digit', year:'numeric' });
-    return `<tr>
-      <td>${dateStr}</td>
+    return `<tr onclick="window.location.href='signals-day.html?date=${iso}'">
+      <td><span class="date-link">${dateStr}</span></td>
       <td>${d.total}</td>
       <td>${d.certain_total}</td>
       <td class="gray">${d.uncertain_total}</td>

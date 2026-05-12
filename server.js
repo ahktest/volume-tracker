@@ -513,7 +513,34 @@ app.get('/api/cmc/:slug', async (req, res) => {
  */
 app.get('/api/signals/scores', requireDashKey, async (req, res) => {
   try {
-    const sql = `
+    const limit  = Math.min(Math.max(Number(req.query.limit)  || 100, 1), 500);
+    const offset = Math.max(Number(req.query.offset) || 0, 0);
+    const date   = req.query.date;       // YYYY-MM-DD
+    const filter = req.query.filter;     // certain | uncertain | open | completed | null
+
+    const where = [];
+    const params = [];
+
+    if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      where.push('DATE(sc.created_at) = ?');
+      params.push(date);
+    }
+    if (filter === 'certain')   where.push("sc.direction IN ('LONG','SHORT')");
+    if (filter === 'uncertain') where.push("sc.direction = 'UNCERTAIN'");
+    if (filter === 'open')      where.push('(so.is_completed = 0 OR so.is_completed IS NULL)');
+    if (filter === 'completed') where.push('so.is_completed = 1');
+
+    const whereSql = where.length ? ('WHERE ' + where.join(' AND ')) : '';
+
+    const [[{ total }]] = await pool.query(
+      `SELECT COUNT(*) AS total
+       FROM signal_scores sc
+       LEFT JOIN signal_outcomes so ON so.signal_score_id = sc.id
+       ${whereSql}`,
+      params
+    );
+
+    const [rows] = await pool.query(`
       SELECT
         sc.id,
         sc.symbol,
@@ -546,11 +573,12 @@ app.get('/api/signals/scores', requireDashKey, async (req, res) => {
       FROM signal_scores sc
       LEFT JOIN signal_snapshots sn ON sn.id = sc.signal_snapshot_id
       LEFT JOIN signal_outcomes so ON so.signal_score_id = sc.id
+      ${whereSql}
       ORDER BY sc.created_at DESC
-      LIMIT 200
-    `;
-    const [rows] = await pool.query(sql);
-    res.json(rows);
+      LIMIT ? OFFSET ?
+    `, [...params, limit, offset]);
+
+    res.json({ rows, total: Number(total), limit, offset });
   } catch (err) {
     console.error('[/api/signals/scores] Hata:', err);
     res.status(500).json({ error: 'Veri alinamadi' });
