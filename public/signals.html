@@ -32,39 +32,51 @@
   .header-bar .logout{padding:6px 14px;background:#374151;color:#9ca3af;border:none;border-radius:6px;cursor:pointer;font-size:13px}
   .header-bar .logout:hover{background:#4b5563;color:#e5e7eb}
 
-  /* ─── Info banner ─── */
-  .info-banner{background:#065f46;color:#a7f3d0;padding:14px 18px;border-radius:10px;margin-bottom:20px;font-size:14px;display:none}
+  /* ─── Filter ─── */
+  .filter-bar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+  .filter-bar button{background:#1f2937;color:#9ca3af;border:1px solid #374151;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer}
+  .filter-bar button.active{background:#1e3a5f;color:#93c5fd;border-color:#3b82f6}
+  .filter-bar button:hover{color:#e5e7eb}
 
   /* ─── Table ─── */
   .table-wrap{overflow-x:auto;margin-bottom:40px}
   table{width:100%;border-collapse:collapse;background:#111827;border-radius:10px;overflow:hidden;font-size:13px}
   th{background:#0f172a;color:#94a3b8;font-weight:600;padding:10px 12px;text-align:left;white-space:nowrap;position:sticky;top:0}
-  td{padding:9px 12px;border-bottom:1px solid #1f2937;vertical-align:middle}
+  td{padding:9px 12px;border-bottom:1px solid #1f2937;vertical-align:middle;white-space:nowrap}
   tr:hover td{background:#0d1320}
 
   .dir-long{color:#34d399;font-weight:700}
   .dir-short{color:#f87171;font-weight:700}
+  .dir-uncertain{color:#9ca3af;font-weight:700}
   .conf-high{color:#34d399}.conf-medium{color:#fbbf24}.conf-low{color:#9ca3af}
+
   .badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600}
   .badge-normal{background:#1e3a5f;color:#60a5fa}
   .badge-funding{background:#3b1f2b;color:#fb923c}
+  .badge-win{background:#064e3b;color:#6ee7b7}
+  .badge-loss{background:#7f1d1d;color:#fca5a5}
+  .badge-neutral{background:#374151;color:#9ca3af}
+  .badge-pending{background:#1f2937;color:#9ca3af;border:1px dashed #374151}
+  .badge-state-open{background:#1f2937;color:#fbbf24}
+  .badge-state-half{background:#1e3a5f;color:#93c5fd}
+  .badge-state-closed{background:#0f172a;color:#9ca3af}
 
-  select{background:#1f2937;color:#e5e7eb;border:1px solid #374151;border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer}
-  select:focus{border-color:#60a5fa;outline:none}
-
-  .btn-save{background:#2563eb;color:#fff;border:none;border-radius:5px;padding:4px 10px;font-size:12px;cursor:pointer}
-  .btn-save:hover{background:#1d4ed8}
-  .btn-save:disabled{opacity:.4;cursor:default}
-  .saved-ok{color:#34d399;font-size:11px;margin-left:6px;display:none}
+  .pnl-pos{color:#34d399;font-weight:600}
+  .pnl-neg{color:#f87171;font-weight:600}
 
   /* ─── Dashboard ─── */
   .dash-title{font-size:1.2rem;color:#93c5fd;margin:30px 0 16px;padding-bottom:8px;border-bottom:1px solid #1f2937}
-  .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:24px}
+  .dash-section-title{font-size:1.05rem;color:#e5e7eb;margin:24px 0 12px;display:flex;align-items:center;gap:10px}
+  .dash-section-title .pill{font-size:11px;padding:2px 10px;border-radius:10px;font-weight:600}
+  .pill-certain{background:#064e3b;color:#6ee7b7}
+  .pill-uncertain{background:#374151;color:#9ca3af}
+
+  .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:18px}
   .stat-card{background:#111827;border-radius:10px;padding:18px 20px}
   .stat-card .label{color:#9ca3af;font-size:12px;margin-bottom:4px}
-  .stat-card .value{font-size:1.6rem;font-weight:700}
+  .stat-card .value{font-size:1.5rem;font-weight:700}
   .stat-card .sub{color:#6b7280;font-size:12px;margin-top:2px}
-  .green{color:#34d399}.red{color:#f87171}.yellow{color:#fbbf24}.blue{color:#60a5fa}
+  .green{color:#34d399}.red{color:#f87171}.yellow{color:#fbbf24}.blue{color:#60a5fa}.gray{color:#9ca3af}
 
   .breakdown-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-bottom:24px}
   .breakdown-card{background:#111827;border-radius:10px;padding:16px 20px}
@@ -109,12 +121,15 @@
     <button class="logout" onclick="doLogout()">Logout</button>
   </div>
 
-  <!-- Info: hepsi dolu -->
-  <div class="info-banner" id="infoBanner">
-    Tum kayitlar dolu. Asagida dashboard istatistiklerini gorebilirsin.
+  <!-- ═══════ TABLE ═══════ -->
+  <div class="filter-bar" id="filterBar">
+    <button data-filter="all"       class="active">Tumu</button>
+    <button data-filter="certain"   >Certain (LONG/SHORT)</button>
+    <button data-filter="uncertain" >Uncertain</button>
+    <button data-filter="open"      >Acik (Pending)</button>
+    <button data-filter="completed" >Tamamlanmis</button>
   </div>
 
-  <!-- ═══════ TABLE ═══════ -->
   <div class="table-wrap">
     <table>
       <thead>
@@ -130,9 +145,10 @@
           <th>TP2</th>
           <th>SL</th>
           <th>Tarih</th>
-          <th>Yon Dogru?</th>
           <th>Sonuc</th>
-          <th></th>
+          <th>PNL %</th>
+          <th>State</th>
+          <th>Exit</th>
         </tr>
       </thead>
       <tbody id="scoresBody"></tbody>
@@ -142,23 +158,25 @@
   <!-- ═══════ DASHBOARD ═══════ -->
   <h3 class="dash-title">Dashboard</h3>
 
-  <div class="stats-grid" id="statsGrid">
-    <!-- JS ile doldurulacak -->
-  </div>
+  <!-- CERTAIN -->
+  <div class="dash-section-title">Certain Sinyaller <span class="pill pill-certain">LONG / SHORT</span></div>
+  <div class="stats-grid" id="certainStats"></div>
 
-  <div class="breakdown-grid" id="breakdownGrid">
-    <!-- source_type bazli kirilim -->
-  </div>
+  <!-- UNCERTAIN -->
+  <div class="dash-section-title">Uncertain Sinyaller <span class="pill pill-uncertain">UNCERTAIN</span></div>
+  <div class="stats-grid" id="uncertainStats"></div>
 
-  <h3 class="dash-title">Confidence Bazli Win Rate</h3>
-  <div class="breakdown-grid" id="confidenceGrid">
-    <!-- HIGH / MEDIUM / LOW kirilim -->
-  </div>
+  <h3 class="dash-title">Final Result Dagilimi (Certain)</h3>
+  <div class="breakdown-grid" id="finalResultGrid"></div>
 
-  <h3 class="dash-title">Listing Tipi Bazli Win Rate</h3>
-  <div class="breakdown-grid" id="listingGrid">
-    <!-- spot, alpha, futures, spot-futures, alpha-futures -->
-  </div>
+  <h3 class="dash-title">Source Type Bazli (Certain)</h3>
+  <div class="breakdown-grid" id="breakdownGrid"></div>
+
+  <h3 class="dash-title">Confidence Bazli (Certain)</h3>
+  <div class="breakdown-grid" id="confidenceGrid"></div>
+
+  <h3 class="dash-title">Listing Tipi Bazli (Certain)</h3>
+  <div class="breakdown-grid" id="listingGrid"></div>
 
   <h3 class="dash-title">Gunluk Detay</h3>
   <div class="table-wrap">
@@ -166,12 +184,14 @@
       <thead>
         <tr>
           <th>Tarih</th>
-          <th>Sinyal</th>
-          <th>Yon Dogru</th>
-          <th>TP1</th>
-          <th>TP2</th>
-          <th>SL</th>
+          <th>Toplam</th>
+          <th>Certain</th>
+          <th>Uncertain</th>
+          <th>Tamamlanan</th>
+          <th>Win</th>
+          <th>Loss</th>
           <th>Win Rate</th>
+          <th>Avg PNL %</th>
         </tr>
       </thead>
       <tbody id="dailyBody"></tbody>
@@ -182,13 +202,14 @@
 <script>
 const API_BASE = '';
 let KEY = '';
+let ALL_ROWS = [];
+let CURRENT_FILTER = 'all';
 
 // ─── Login ───
 function doLogin() {
   const v = document.getElementById('passInput').value.trim();
   if (!v) return;
   KEY = v;
-  // test: ping API
   fetch(API_BASE + '/api/signals/scores', { headers: { 'x-dash-key': KEY } })
     .then(r => {
       if (!r.ok) throw new Error();
@@ -199,7 +220,8 @@ function doLogin() {
       return r.json();
     })
     .then(data => {
-      renderTable(data);
+      ALL_ROWS = data;
+      renderTable();
       loadDashboard();
     })
     .catch(() => {
@@ -228,6 +250,14 @@ function doLogout() {
   document.getElementById('passInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') doLogin();
   });
+
+  // Filter buttons
+  document.getElementById('filterBar').addEventListener('click', e => {
+    if (e.target.tagName !== 'BUTTON') return;
+    CURRENT_FILTER = e.target.dataset.filter;
+    [...document.querySelectorAll('#filterBar button')].forEach(b => b.classList.toggle('active', b === e.target));
+    renderTable();
+  });
 })();
 
 // ─── API helpers ───
@@ -238,66 +268,7 @@ function api(path, opts = {}) {
   }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
 }
 
-// ─── Render Table ───
-function renderTable(rows) {
-  const tbody = document.getElementById('scoresBody');
-  // Sadece henuz degerlendirilmemis kayitlari goster
-  const needsReview = rows.filter(r => r.manual_direction_ok == null || r.manual_result == null);
-
-  if (needsReview.length === 0) {
-    document.getElementById('infoBanner').style.display = 'block';
-  } else {
-    document.getElementById('infoBanner').style.display = 'none';
-  }
-
-  tbody.innerHTML = needsReview.map((r, i) => {
-    const dirClass = r.direction === 'LONG' ? 'dir-long' : 'dir-short';
-    const confClass = 'conf-' + (r.confidence || 'low').toLowerCase();
-    const srcClass = (r.source_type || '').includes('funding') ? 'badge-funding' : 'badge-normal';
-    const srcLabel = (r.source_type || 'normal');
-
-    const dirVal = r.manual_direction_ok;
-    const resVal = r.manual_result;
-
-    const dirSelect = `
-      <select data-id="${r.id}" data-field="manual_direction_ok" onchange="markDirty(this)">
-        <option value="" ${dirVal == null ? 'selected' : ''}>-</option>
-        <option value="1" ${dirVal === 1 ? 'selected' : ''}>Dogru</option>
-        <option value="0" ${dirVal === 0 ? 'selected' : ''}>Yanlis</option>
-      </select>`;
-
-    const resSelect = `
-      <select data-id="${r.id}" data-field="manual_result" onchange="markDirty(this)">
-        <option value="" ${resVal == null ? 'selected' : ''}>-</option>
-        <option value="tp1" ${resVal === 'tp1' ? 'selected' : ''}>TP1</option>
-        <option value="tp2" ${resVal === 'tp2' ? 'selected' : ''}>TP2</option>
-        <option value="sl" ${resVal === 'sl' ? 'selected' : ''}>SL</option>
-      </select>`;
-
-    const ts = r.created_at ? new Date(r.created_at).toLocaleString('tr-TR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '-';
-
-    return `<tr>
-      <td>${i + 1}</td>
-      <td><strong>${r.symbol}</strong></td>
-      <td><span class="badge ${srcClass}">${srcLabel}</span></td>
-      <td>${r.score}</td>
-      <td class="${dirClass}">${r.direction}</td>
-      <td class="${confClass}">${r.confidence}</td>
-      <td>${fmt(r.entry_price)}</td>
-      <td>${fmt(r.tp1)}</td>
-      <td>${fmt(r.tp2)}</td>
-      <td>${fmt(r.sl)}</td>
-      <td>${ts}</td>
-      <td>${dirSelect}</td>
-      <td>${resSelect}</td>
-      <td>
-        <button class="btn-save" id="btn-${r.id}" onclick="saveRow(${r.id})" disabled>Kaydet</button>
-        <span class="saved-ok" id="ok-${r.id}">&#10003;</span>
-      </td>
-    </tr>`;
-  }).join('');
-}
-
+// ─── Helpers ───
 function fmt(v) {
   if (v == null) return '-';
   const n = Number(v);
@@ -305,141 +276,273 @@ function fmt(v) {
   return n < 1 ? n.toPrecision(5) : n.toFixed(2);
 }
 
-function markDirty(el) {
-  const id = el.dataset.id;
-  const btn = document.getElementById('btn-' + id);
-  if (btn) btn.disabled = false;
+function fmtPct(v) {
+  if (v == null) return '-';
+  const n = Number(v);
+  if (!Number.isFinite(n)) return '-';
+  return (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
 }
 
-async function saveRow(id) {
-  const dirEl = document.querySelector(`select[data-id="${id}"][data-field="manual_direction_ok"]`);
-  const resEl = document.querySelector(`select[data-id="${id}"][data-field="manual_result"]`);
+function pnlClass(v) {
+  if (v == null) return '';
+  const n = Number(v);
+  if (!Number.isFinite(n)) return '';
+  return n >= 0 ? 'pnl-pos' : 'pnl-neg';
+}
 
-  const body = {};
-  if (dirEl.value !== '') body.manual_direction_ok = Number(dirEl.value);
-  else body.manual_direction_ok = null;
-  if (resEl.value !== '') body.manual_result = resEl.value;
-  else body.manual_result = null;
-
-  try {
-    await api(`/api/signals/scores/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
-    const btn = document.getElementById('btn-' + id);
-    btn.disabled = true;
-    const ok = document.getElementById('ok-' + id);
-    ok.style.display = 'inline';
-    setTimeout(() => ok.style.display = 'none', 2000);
-    // dashboard guncelle
-    loadDashboard();
-  } catch (e) {
-    alert('Kaydetme hatasi: ' + e.message);
+// final_result -> badge etiketi + tipi
+function finalResultBadge(fr, isCompleted) {
+  if (!fr) {
+    return `<span class="badge badge-pending">${isCompleted ? 'no_data' : 'pending'}</span>`;
   }
+  const winSet  = new Set(['dir_correct_tp1','dir_correct_tp2']);
+  const lossSet = new Set(['dir_correct_sl','dir_wrong_tp1','dir_wrong_sl']);
+  let cls = 'badge-neutral';
+  if (winSet.has(fr)) cls = 'badge-win';
+  else if (lossSet.has(fr)) cls = 'badge-loss';
+  // okunabilir label
+  const labels = {
+    dir_correct_tp1: 'WIN · TP1',
+    dir_correct_tp2: 'WIN · TP2',
+    dir_correct_sl:  'LOSS · SL',
+    dir_wrong_tp1:   'LOSS · ters TP1',
+    dir_wrong_sl:    'LOSS · ters SL',
+    neutral:         'NEUTRAL',
+  };
+  return `<span class="badge ${cls}">${labels[fr] || fr}</span>`;
+}
+
+function stateBadge(st) {
+  if (!st || st === 'OPEN') return `<span class="badge badge-state-open">OPEN</span>`;
+  if (st === 'TP1_HIT_HALFCLOSED') return `<span class="badge badge-state-half">TP1·HALF</span>`;
+  if (st === 'CLOSED') return `<span class="badge badge-state-closed">CLOSED</span>`;
+  return `<span class="badge badge-state-open">${st}</span>`;
+}
+
+function dirClass(d) {
+  if (d === 'LONG') return 'dir-long';
+  if (d === 'SHORT') return 'dir-short';
+  return 'dir-uncertain';
+}
+
+// ─── Render Table ───
+function filteredRows() {
+  return ALL_ROWS.filter(r => {
+    switch (CURRENT_FILTER) {
+      case 'certain':   return r.direction === 'LONG' || r.direction === 'SHORT';
+      case 'uncertain': return r.direction === 'UNCERTAIN';
+      case 'open':      return r.is_completed === 0 || r.is_completed == null;
+      case 'completed': return r.is_completed === 1;
+      default:          return true;
+    }
+  });
+}
+
+function renderTable() {
+  const tbody = document.getElementById('scoresBody');
+  const rows = filteredRows();
+
+  tbody.innerHTML = rows.map((r, i) => {
+    const srcClass = (r.source_type || '').includes('funding') ? 'badge-funding' : 'badge-normal';
+    const srcLabel = (r.source_type || 'normal');
+    const confClass = 'conf-' + (r.confidence || 'low').toLowerCase();
+    const ts = r.created_at ? new Date(r.created_at).toLocaleString('tr-TR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '-';
+
+    return `<tr>
+      <td>${i + 1}</td>
+      <td><strong>${r.symbol}</strong></td>
+      <td><span class="badge ${srcClass}">${srcLabel}</span></td>
+      <td>${r.score}</td>
+      <td class="${dirClass(r.direction)}">${r.direction}</td>
+      <td class="${confClass}">${r.confidence || '-'}</td>
+      <td>${fmt(r.entry_price)}</td>
+      <td>${fmt(r.tp1)}</td>
+      <td>${fmt(r.tp2)}</td>
+      <td>${fmt(r.sl)}</td>
+      <td>${ts}</td>
+      <td>${finalResultBadge(r.final_result, r.is_completed)}</td>
+      <td class="${pnlClass(r.realized_pnl_pct)}">${fmtPct(r.realized_pnl_pct)}</td>
+      <td>${stateBadge(r.final_state)}</td>
+      <td>${r.exit_reason || '-'}</td>
+    </tr>`;
+  }).join('');
 }
 
 // ─── Dashboard ───
 async function loadDashboard() {
   try {
     const stats = await api('/api/signals/stats');
-    renderStats(stats);
-    renderBreakdown(stats);
-    renderConfidence(stats);
-    renderListing(stats);
+    renderCertainStats(stats.certain || {});
+    renderUncertainStats(stats.uncertain || {});
+    renderFinalResult(stats.by_final_result || {});
+    renderBreakdown(stats.by_source || {});
+    renderConfidence(stats.by_confidence || {});
+    renderListing(stats.by_listing || {});
     renderDaily(stats.daily || []);
   } catch (e) {
     console.error('Dashboard hata:', e);
   }
 }
 
-function renderStats(s) {
-  const t = s.totals || {};
-  const grid = document.getElementById('statsGrid');
+function pct(num, den) {
+  if (!den) return '-';
+  return ((num / den) * 100).toFixed(1) + '%';
+}
 
-  const winRate = t.reviewed > 0 ? ((t.direction_correct / t.reviewed) * 100).toFixed(1) : '-';
-  const tp1Rate = t.reviewed > 0 ? ((t.tp1_count / t.reviewed) * 100).toFixed(1) : '-';
-  const tp2Rate = t.reviewed > 0 ? ((t.tp2_count / t.reviewed) * 100).toFixed(1) : '-';
-  const slRate = t.reviewed > 0 ? ((t.sl_count / t.reviewed) * 100).toFixed(1) : '-';
+function renderCertainStats(c) {
+  const grid = document.getElementById('certainStats');
+  const dirRate = pct(c.direction_correct, c.completed);
+  const winRate = pct(c.wins, c.completed);
+  const tp1r    = pct(c.tp1_hit, c.completed);
+  const tp2r    = pct(c.tp2_hit, c.completed);
+  const slr     = pct(c.sl_hit, c.completed);
+  const dirNum  = parseFloat(dirRate);
+  const winNum  = parseFloat(winRate);
 
   grid.innerHTML = `
     <div class="stat-card">
       <div class="label">Toplam Sinyal</div>
-      <div class="value blue">${t.total || 0}</div>
-      <div class="sub">Degerlendirilmis: ${t.reviewed || 0}</div>
+      <div class="value blue">${c.total || 0}</div>
+      <div class="sub">Tamamlanan: ${c.completed || 0} · Acik: ${c.pending || 0}</div>
     </div>
     <div class="stat-card">
-      <div class="label">Yon Basarisi (Win Rate)</div>
-      <div class="value ${Number(winRate) >= 50 ? 'green' : 'red'}">${winRate}%</div>
-      <div class="sub">${t.direction_correct || 0} / ${t.reviewed || 0} dogru</div>
+      <div class="label">Yon Basarisi</div>
+      <div class="value ${dirNum >= 50 ? 'green' : 'red'}">${dirRate}</div>
+      <div class="sub">${c.direction_correct || 0} / ${c.completed || 0} dogru</div>
     </div>
     <div class="stat-card">
-      <div class="label">TP1 Orani</div>
-      <div class="value green">${tp1Rate}%</div>
-      <div class="sub">${t.tp1_count || 0} adet</div>
+      <div class="label">Win Rate (TP1+TP2)</div>
+      <div class="value ${winNum >= 50 ? 'green' : 'red'}">${winRate}</div>
+      <div class="sub">${c.wins || 0} W · ${c.losses || 0} L · ${c.neutrals || 0} N</div>
     </div>
     <div class="stat-card">
-      <div class="label">TP2 Orani</div>
-      <div class="value green">${tp2Rate}%</div>
-      <div class="sub">${t.tp2_count || 0} adet</div>
+      <div class="label">TP1 Hit</div>
+      <div class="value green">${tp1r}</div>
+      <div class="sub">${c.tp1_hit || 0} adet</div>
     </div>
     <div class="stat-card">
-      <div class="label">SL Orani</div>
-      <div class="value red">${slRate}%</div>
-      <div class="sub">${t.sl_count || 0} adet</div>
+      <div class="label">TP2 Hit</div>
+      <div class="value green">${tp2r}</div>
+      <div class="sub">${c.tp2_hit || 0} adet</div>
     </div>
     <div class="stat-card">
-      <div class="label">Beklenen</div>
-      <div class="value yellow">${t.pending || 0}</div>
-      <div class="sub">Degerlendirilmemis</div>
+      <div class="label">SL Hit</div>
+      <div class="value red">${slr}</div>
+      <div class="sub">${c.sl_hit || 0} adet</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Ortalama PNL</div>
+      <div class="value ${(c.avg_pnl || 0) >= 0 ? 'green' : 'red'}">${fmtPct(c.avg_pnl)}</div>
+      <div class="sub">Toplam: ${fmtPct(c.total_pnl)}</div>
     </div>
   `;
 }
 
-function renderBreakdown(s) {
-  const grid = document.getElementById('breakdownGrid');
-  const sources = s.by_source || {};
+function renderUncertainStats(u) {
+  const grid = document.getElementById('uncertainStats');
+  const tp1r = pct(u.tp1_hit, u.completed);
+  const slr  = pct(u.sl_hit, u.completed);
 
-  grid.innerHTML = Object.entries(sources).map(([src, d]) => {
-    const wr = d.reviewed > 0 ? ((d.direction_correct / d.reviewed) * 100).toFixed(1) : '-';
+  grid.innerHTML = `
+    <div class="stat-card">
+      <div class="label">Toplam Sinyal</div>
+      <div class="value gray">${u.total || 0}</div>
+      <div class="sub">Tamamlanan: ${u.completed || 0} · Acik: ${u.pending || 0}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Ortalama PNL</div>
+      <div class="value ${(u.avg_pnl || 0) >= 0 ? 'green' : 'red'}">${fmtPct(u.avg_pnl)}</div>
+      <div class="sub">Toplam: ${fmtPct(u.total_pnl)}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">TP1 Seviyesi</div>
+      <div class="value green">${tp1r}</div>
+      <div class="sub">${u.tp1_hit || 0} kez ulasti</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">TP2 Seviyesi</div>
+      <div class="value green">${pct(u.tp2_hit, u.completed)}</div>
+      <div class="sub">${u.tp2_hit || 0} kez ulasti</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">SL Seviyesi</div>
+      <div class="value red">${slr}</div>
+      <div class="sub">${u.sl_hit || 0} kez ulasti</div>
+    </div>
+  `;
+}
+
+function renderFinalResult(map) {
+  const grid = document.getElementById('finalResultGrid');
+  const labels = {
+    dir_correct_tp1: { txt: 'WIN · TP1', cls: 'green' },
+    dir_correct_tp2: { txt: 'WIN · TP2', cls: 'green' },
+    dir_correct_sl:  { txt: 'LOSS · Yon Dogru SL', cls: 'red' },
+    dir_wrong_tp1:   { txt: 'LOSS · Yon Yanlis TP1', cls: 'red' },
+    dir_wrong_sl:    { txt: 'LOSS · Yon Yanlis SL', cls: 'red' },
+    neutral:         { txt: 'NEUTRAL', cls: 'yellow' },
+    pending:         { txt: 'PENDING', cls: '' },
+  };
+  const total = Object.values(map).reduce((s, v) => s + v, 0);
+  const order = ['dir_correct_tp2','dir_correct_tp1','dir_correct_sl','dir_wrong_tp1','dir_wrong_sl','neutral','pending'];
+
+  grid.innerHTML = order.filter(k => map[k]).map(k => {
+    const info = labels[k] || { txt: k, cls: '' };
+    const count = map[k];
+    const ratio = total > 0 ? ((count / total) * 100).toFixed(1) : '0';
     return `
     <div class="breakdown-card">
-      <h4>${src === 'funding_stuck' ? 'Funding Stuck' : 'Normal'}</h4>
-      <div class="breakdown-row"><span class="lbl">Sinyal</span><span class="val">${d.total}</span></div>
-      <div class="breakdown-row"><span class="lbl">Degerlendirilmis</span><span class="val">${d.reviewed}</span></div>
-      <div class="breakdown-row"><span class="lbl">Yon Basarisi</span><span class="val ${Number(wr) >= 50 ? 'green' : 'red'}">${wr}%</span></div>
-      <div class="breakdown-row"><span class="lbl">TP1</span><span class="val green">${d.tp1_count}</span></div>
-      <div class="breakdown-row"><span class="lbl">TP2</span><span class="val green">${d.tp2_count}</span></div>
-      <div class="breakdown-row"><span class="lbl">SL</span><span class="val red">${d.sl_count}</span></div>
+      <h4 class="${info.cls}">${info.txt}</h4>
+      <div class="breakdown-row"><span class="lbl">Adet</span><span class="val">${count}</span></div>
+      <div class="breakdown-row"><span class="lbl">Oran</span><span class="val">${ratio}%</span></div>
     </div>`;
   }).join('');
 }
 
-function renderConfidence(s) {
+function renderBreakdown(sources) {
+  const grid = document.getElementById('breakdownGrid');
+  grid.innerHTML = Object.entries(sources).map(([src, d]) => {
+    const wr = d.certain_total > 0 ? ((d.certain_dir_correct / d.certain_total) * 100).toFixed(1) : '-';
+    const winRate = d.certain_total > 0 ? ((d.certain_wins / d.certain_total) * 100).toFixed(1) : '-';
+    return `
+    <div class="breakdown-card">
+      <h4>${src === 'funding_stuck' ? 'Funding Stuck' : (src === 'normal' ? 'Normal' : src)}</h4>
+      <div class="breakdown-row"><span class="lbl">Certain</span><span class="val">${d.certain_total}</span></div>
+      <div class="breakdown-row"><span class="lbl">Uncertain</span><span class="val gray">${d.uncertain_total}</span></div>
+      <div class="breakdown-row"><span class="lbl">Yon Basarisi</span><span class="val ${Number(wr) >= 50 ? 'green' : 'red'}">${wr}%</span></div>
+      <div class="breakdown-row"><span class="lbl">Win Rate</span><span class="val ${Number(winRate) >= 50 ? 'green' : 'red'}">${winRate}%</span></div>
+      <div class="breakdown-row"><span class="lbl">Win / Loss</span><span class="val"><span class="green">${d.certain_wins}</span> / <span class="red">${d.certain_losses}</span></span></div>
+      <div class="breakdown-row"><span class="lbl">TP1 / TP2 / SL</span><span class="val"><span class="green">${d.certain_tp1}</span> / <span class="green">${d.certain_tp2}</span> / <span class="red">${d.certain_sl}</span></span></div>
+      <div class="breakdown-row"><span class="lbl">Avg PNL (Certain)</span><span class="val ${(d.certain_avg_pnl || 0) >= 0 ? 'green' : 'red'}">${fmtPct(d.certain_avg_pnl)}</span></div>
+      <div class="breakdown-row"><span class="lbl">Avg PNL (Uncertain)</span><span class="val ${(d.uncertain_avg_pnl || 0) >= 0 ? 'green' : 'red'}">${fmtPct(d.uncertain_avg_pnl)}</span></div>
+    </div>`;
+  }).join('');
+}
+
+function renderConfidence(levels) {
   const grid = document.getElementById('confidenceGrid');
-  const levels = s.by_confidence || {};
   const order = ['HIGH', 'MEDIUM', 'LOW'];
   const colors = { HIGH: 'green', MEDIUM: 'yellow', LOW: '' };
 
   grid.innerHTML = order.filter(lv => levels[lv]).map(lv => {
     const d = levels[lv];
-    const wr = d.reviewed > 0 ? ((d.direction_correct / d.reviewed) * 100).toFixed(1) : '-';
-    const tp1r = d.reviewed > 0 ? ((d.tp1_count / d.reviewed) * 100).toFixed(1) : '-';
-    const tp2r = d.reviewed > 0 ? ((d.tp2_count / d.reviewed) * 100).toFixed(1) : '-';
-    const slr = d.reviewed > 0 ? ((d.sl_count / d.reviewed) * 100).toFixed(1) : '-';
+    const wr  = d.total > 0 ? ((d.direction_correct / d.total) * 100).toFixed(1) : '-';
+    const wnr = d.total > 0 ? ((d.wins / d.total) * 100).toFixed(1) : '-';
     return `
     <div class="breakdown-card">
       <h4 class="${colors[lv]}">${lv}</h4>
-      <div class="breakdown-row"><span class="lbl">Sinyal</span><span class="val">${d.total}</span></div>
-      <div class="breakdown-row"><span class="lbl">Degerlendirilmis</span><span class="val">${d.reviewed}</span></div>
-      <div class="breakdown-row"><span class="lbl">Win Rate</span><span class="val ${Number(wr) >= 50 ? 'green' : (wr === '-' ? '' : 'red')}">${wr}%</span></div>
-      <div class="breakdown-row"><span class="lbl">TP1</span><span class="val green">${d.tp1_count} (${tp1r}%)</span></div>
-      <div class="breakdown-row"><span class="lbl">TP2</span><span class="val green">${d.tp2_count} (${tp2r}%)</span></div>
-      <div class="breakdown-row"><span class="lbl">SL</span><span class="val red">${d.sl_count} (${slr}%)</span></div>
+      <div class="breakdown-row"><span class="lbl">Toplam</span><span class="val">${d.total}</span></div>
+      <div class="breakdown-row"><span class="lbl">Yon Basarisi</span><span class="val ${Number(wr) >= 50 ? 'green' : (wr === '-' ? '' : 'red')}">${wr}%</span></div>
+      <div class="breakdown-row"><span class="lbl">Win Rate</span><span class="val ${Number(wnr) >= 50 ? 'green' : (wnr === '-' ? '' : 'red')}">${wnr}%</span></div>
+      <div class="breakdown-row"><span class="lbl">Win / Loss</span><span class="val"><span class="green">${d.wins}</span> / <span class="red">${d.losses}</span></span></div>
+      <div class="breakdown-row"><span class="lbl">TP1 / TP2 / SL</span><span class="val"><span class="green">${d.tp1_hit}</span> / <span class="green">${d.tp2_hit}</span> / <span class="red">${d.sl_hit}</span></span></div>
+      <div class="breakdown-row"><span class="lbl">Avg PNL</span><span class="val ${(d.avg_pnl || 0) >= 0 ? 'green' : 'red'}">${fmtPct(d.avg_pnl)}</span></div>
     </div>`;
   }).join('');
 }
 
-function renderListing(s) {
+function renderListing(types) {
   const grid = document.getElementById('listingGrid');
-  const types = s.by_listing || {};
-
   const labels = {
     'spot-futures': 'Spot & Futures',
     'alpha-futures': 'Alpha & Futures',
@@ -455,25 +558,22 @@ function renderListing(s) {
     'unknown': '',
   };
 
-  // Sinyal sayisina gore sirala
   const sorted = Object.entries(types).sort((a, b) => b[1].total - a[1].total);
 
   grid.innerHTML = sorted.map(([key, d]) => {
-    const wr = d.reviewed > 0 ? ((d.direction_correct / d.reviewed) * 100).toFixed(1) : '-';
-    const tp1r = d.reviewed > 0 ? ((d.tp1_count / d.reviewed) * 100).toFixed(1) : '-';
-    const tp2r = d.reviewed > 0 ? ((d.tp2_count / d.reviewed) * 100).toFixed(1) : '-';
-    const slr = d.reviewed > 0 ? ((d.sl_count / d.reviewed) * 100).toFixed(1) : '-';
+    const wr  = d.total > 0 ? ((d.direction_correct / d.total) * 100).toFixed(1) : '-';
+    const wnr = d.total > 0 ? ((d.wins / d.total) * 100).toFixed(1) : '-';
     const label = labels[key] || key;
     const clr = colors[key] || '';
     return `
     <div class="breakdown-card">
       <h4 class="${clr}">${label}</h4>
-      <div class="breakdown-row"><span class="lbl">Sinyal</span><span class="val">${d.total}</span></div>
-      <div class="breakdown-row"><span class="lbl">Degerlendirilmis</span><span class="val">${d.reviewed}</span></div>
-      <div class="breakdown-row"><span class="lbl">Win Rate</span><span class="val ${Number(wr) >= 50 ? 'green' : (wr === '-' ? '' : 'red')}">${wr}%</span></div>
-      <div class="breakdown-row"><span class="lbl">TP1</span><span class="val green">${d.tp1_count} (${tp1r}%)</span></div>
-      <div class="breakdown-row"><span class="lbl">TP2</span><span class="val green">${d.tp2_count} (${tp2r}%)</span></div>
-      <div class="breakdown-row"><span class="lbl">SL</span><span class="val red">${d.sl_count} (${slr}%)</span></div>
+      <div class="breakdown-row"><span class="lbl">Toplam</span><span class="val">${d.total}</span></div>
+      <div class="breakdown-row"><span class="lbl">Yon Basarisi</span><span class="val ${Number(wr) >= 50 ? 'green' : (wr === '-' ? '' : 'red')}">${wr}%</span></div>
+      <div class="breakdown-row"><span class="lbl">Win Rate</span><span class="val ${Number(wnr) >= 50 ? 'green' : (wnr === '-' ? '' : 'red')}">${wnr}%</span></div>
+      <div class="breakdown-row"><span class="lbl">Win / Loss</span><span class="val"><span class="green">${d.wins}</span> / <span class="red">${d.losses}</span></span></div>
+      <div class="breakdown-row"><span class="lbl">TP1 / TP2 / SL</span><span class="val"><span class="green">${d.tp1_hit}</span> / <span class="green">${d.tp2_hit}</span> / <span class="red">${d.sl_hit}</span></span></div>
+      <div class="breakdown-row"><span class="lbl">Avg PNL</span><span class="val ${(d.avg_pnl || 0) >= 0 ? 'green' : 'red'}">${fmtPct(d.avg_pnl)}</span></div>
     </div>`;
   }).join('');
 }
@@ -481,17 +581,19 @@ function renderListing(s) {
 function renderDaily(days) {
   const tbody = document.getElementById('dailyBody');
   tbody.innerHTML = days.map(d => {
-    const wr = d.reviewed > 0 ? ((d.direction_correct / d.reviewed) * 100).toFixed(1) + '%' : '-';
-    const wrClass = Number(wr) >= 50 ? 'green' : (wr === '-' ? '' : 'red');
+    const wr = d.completed > 0 ? ((d.wins / d.completed) * 100).toFixed(1) + '%' : '-';
+    const wrClass = parseFloat(wr) >= 50 ? 'green' : (wr === '-' ? '' : 'red');
     const dateStr = new Date(d.date).toLocaleDateString('tr-TR', { day:'2-digit', month:'2-digit', year:'numeric' });
     return `<tr>
       <td>${dateStr}</td>
       <td>${d.total}</td>
-      <td>${d.direction_correct} / ${d.reviewed}</td>
-      <td class="green">${d.tp1_count}</td>
-      <td class="green">${d.tp2_count}</td>
-      <td class="red">${d.sl_count}</td>
+      <td>${d.certain_total}</td>
+      <td class="gray">${d.uncertain_total}</td>
+      <td>${d.completed}</td>
+      <td class="green">${d.wins}</td>
+      <td class="red">${d.losses}</td>
       <td class="${wrClass}">${wr}</td>
+      <td class="${(d.avg_pnl || 0) >= 0 ? 'pnl-pos' : 'pnl-neg'}">${fmtPct(d.avg_pnl)}</td>
     </tr>`;
   }).join('');
 }

@@ -523,20 +523,30 @@ app.get('/api/signals/scores', requireDashKey, async (req, res) => {
         sc.tp1,
         sc.tp2,
         sc.sl,
-        sc.manual_direction_ok,
-        sc.manual_result,
         sc.exception_applied,
         sc.created_at,
         sn.source_type,
         sn.entry_price,
         sn.funding_fee,
         sn.volume_change,
-        sn.price_change
+        sn.price_change,
+        sn.listing_type,
+        so.direction_correct,
+        so.final_result,
+        so.final_state,
+        so.exit_reason,
+        so.realized_pnl_pct,
+        so.is_completed,
+        so.tp1_hit_ever,
+        so.tp2_hit_ever,
+        so.sl_hit_ever,
+        so.max_win_pct,
+        so.max_loss_pct,
+        so.tp1_hit_at
       FROM signal_scores sc
       LEFT JOIN signal_snapshots sn ON sn.id = sc.signal_snapshot_id
-      ORDER BY
-        (sc.manual_direction_ok IS NULL OR sc.manual_result IS NULL) DESC,
-        sc.created_at DESC
+      LEFT JOIN signal_outcomes so ON so.signal_score_id = sc.id
+      ORDER BY sc.created_at DESC
       LIMIT 200
     `;
     const [rows] = await pool.query(sql);
@@ -593,135 +603,234 @@ app.patch('/api/signals/scores/:id', requireDashKey, async (req, res) => {
  */
 app.get('/api/signals/stats', requireDashKey, async (req, res) => {
   try {
-    // 1. Genel toplamlar
-    const [[totals]] = await pool.query(`
+    /**
+     * Sonuclar artik signal_outcomes tablosundan geliyor.
+     * Iki ana grup:
+     *  - CERTAIN: direction IN ('LONG','SHORT')  -> direction_correct anlamli
+     *  - UNCERTAIN: direction = 'UNCERTAIN'      -> sadece pnl ve seviye gecisleri
+     */
+
+    const certainWhere = `so.direction IN ('LONG','SHORT')`;
+    const uncertainWhere = `so.direction = 'UNCERTAIN'`;
+
+    // Win/loss/neutral kategorileri final_result uzerinden:
+    //   WIN     = dir_correct_tp1, dir_correct_tp2
+    //   LOSS    = dir_correct_sl, dir_wrong_tp1, dir_wrong_sl
+    //   NEUTRAL = neutral
+    const winExpr  = `so.final_result IN ('dir_correct_tp1','dir_correct_tp2')`;
+    const lossExpr = `so.final_result IN ('dir_correct_sl','dir_wrong_tp1','dir_wrong_sl')`;
+    const neuExpr  = `so.final_result = 'neutral'`;
+
+    // --- 1. CERTAIN totals ---
+    const [[certainTotals]] = await pool.query(`
       SELECT
         COUNT(*) AS total,
-        SUM(CASE WHEN manual_direction_ok IS NOT NULL AND manual_result IS NOT NULL THEN 1 ELSE 0 END) AS reviewed,
-        SUM(CASE WHEN manual_direction_ok IS NULL OR manual_result IS NULL THEN 1 ELSE 0 END) AS pending,
-        SUM(CASE WHEN manual_direction_ok = 1 THEN 1 ELSE 0 END) AS direction_correct,
-        SUM(CASE WHEN manual_result = 'tp1' THEN 1 ELSE 0 END) AS tp1_count,
-        SUM(CASE WHEN manual_result = 'tp2' THEN 1 ELSE 0 END) AS tp2_count,
-        SUM(CASE WHEN manual_result = 'sl' THEN 1 ELSE 0 END) AS sl_count
-      FROM signal_scores
+        SUM(so.is_completed = 1) AS completed,
+        SUM(so.is_completed = 0) AS pending,
+        SUM(so.direction_correct = 1) AS direction_correct,
+        SUM(${winExpr})  AS wins,
+        SUM(${lossExpr}) AS losses,
+        SUM(${neuExpr})  AS neutrals,
+        SUM(so.tp1_hit_ever = 1) AS tp1_hit,
+        SUM(so.tp2_hit_ever = 1) AS tp2_hit,
+        SUM(so.sl_hit_ever  = 1) AS sl_hit,
+        AVG(so.realized_pnl_pct) AS avg_pnl,
+        SUM(so.realized_pnl_pct) AS total_pnl
+      FROM signal_outcomes so
+      WHERE ${certainWhere}
     `);
 
-    // 2. Source type bazli kirilim
+    // --- 2. UNCERTAIN totals ---
+    const [[uncertainTotals]] = await pool.query(`
+      SELECT
+        COUNT(*) AS total,
+        SUM(so.is_completed = 1) AS completed,
+        SUM(so.is_completed = 0) AS pending,
+        SUM(so.tp1_hit_ever = 1) AS tp1_hit,
+        SUM(so.tp2_hit_ever = 1) AS tp2_hit,
+        SUM(so.sl_hit_ever  = 1) AS sl_hit,
+        AVG(so.realized_pnl_pct) AS avg_pnl,
+        SUM(so.realized_pnl_pct) AS total_pnl
+      FROM signal_outcomes so
+      WHERE ${uncertainWhere}
+    `);
+
+    // --- 3. final_result dagilimi (sadece certain) ---
+    const [finalResultRows] = await pool.query(`
+      SELECT
+        COALESCE(so.final_result, 'pending') AS final_result,
+        COUNT(*) AS count
+      FROM signal_outcomes so
+      WHERE ${certainWhere}
+      GROUP BY COALESCE(so.final_result, 'pending')
+    `);
+    const by_final_result = {};
+    for (const r of finalResultRows) {
+      by_final_result[r.final_result] = Number(r.count);
+    }
+
+    // --- 4. Source type bazli (certain + uncertain ayri) ---
     const [bySourceRows] = await pool.query(`
       SELECT
         COALESCE(sn.source_type, 'unknown') AS source_type,
-        COUNT(*) AS total,
-        SUM(CASE WHEN sc.manual_direction_ok IS NOT NULL AND sc.manual_result IS NOT NULL THEN 1 ELSE 0 END) AS reviewed,
-        SUM(CASE WHEN sc.manual_direction_ok = 1 THEN 1 ELSE 0 END) AS direction_correct,
-        SUM(CASE WHEN sc.manual_result = 'tp1' THEN 1 ELSE 0 END) AS tp1_count,
-        SUM(CASE WHEN sc.manual_result = 'tp2' THEN 1 ELSE 0 END) AS tp2_count,
-        SUM(CASE WHEN sc.manual_result = 'sl' THEN 1 ELSE 0 END) AS sl_count
-      FROM signal_scores sc
+        SUM(so.direction IN ('LONG','SHORT')) AS certain_total,
+        SUM(so.direction IN ('LONG','SHORT') AND so.direction_correct = 1) AS certain_dir_correct,
+        SUM(so.direction IN ('LONG','SHORT') AND ${winExpr}) AS certain_wins,
+        SUM(so.direction IN ('LONG','SHORT') AND ${lossExpr}) AS certain_losses,
+        SUM(so.direction IN ('LONG','SHORT') AND so.tp1_hit_ever = 1) AS certain_tp1,
+        SUM(so.direction IN ('LONG','SHORT') AND so.tp2_hit_ever = 1) AS certain_tp2,
+        SUM(so.direction IN ('LONG','SHORT') AND so.sl_hit_ever  = 1) AS certain_sl,
+        AVG(CASE WHEN so.direction IN ('LONG','SHORT') THEN so.realized_pnl_pct END) AS certain_avg_pnl,
+        SUM(so.direction = 'UNCERTAIN') AS uncertain_total,
+        AVG(CASE WHEN so.direction = 'UNCERTAIN' THEN so.realized_pnl_pct END) AS uncertain_avg_pnl
+      FROM signal_outcomes so
+      JOIN signal_scores sc ON sc.id = so.signal_score_id
       LEFT JOIN signal_snapshots sn ON sn.id = sc.signal_snapshot_id
       GROUP BY COALESCE(sn.source_type, 'unknown')
     `);
-
     const by_source = {};
     for (const r of bySourceRows) {
       by_source[r.source_type] = {
-        total: Number(r.total),
-        reviewed: Number(r.reviewed),
-        direction_correct: Number(r.direction_correct),
-        tp1_count: Number(r.tp1_count),
-        tp2_count: Number(r.tp2_count),
-        sl_count: Number(r.sl_count),
+        certain_total: Number(r.certain_total || 0),
+        certain_dir_correct: Number(r.certain_dir_correct || 0),
+        certain_wins: Number(r.certain_wins || 0),
+        certain_losses: Number(r.certain_losses || 0),
+        certain_tp1: Number(r.certain_tp1 || 0),
+        certain_tp2: Number(r.certain_tp2 || 0),
+        certain_sl: Number(r.certain_sl || 0),
+        certain_avg_pnl: r.certain_avg_pnl == null ? null : Number(Number(r.certain_avg_pnl).toFixed(2)),
+        uncertain_total: Number(r.uncertain_total || 0),
+        uncertain_avg_pnl: r.uncertain_avg_pnl == null ? null : Number(Number(r.uncertain_avg_pnl).toFixed(2)),
       };
     }
 
-    // 3. Gunluk detay (son 30 gun)
-    const [dailyRows] = await pool.query(`
-      SELECT
-        DATE(sc.created_at) AS date,
-        COUNT(*) AS total,
-        SUM(CASE WHEN sc.manual_direction_ok IS NOT NULL AND sc.manual_result IS NOT NULL THEN 1 ELSE 0 END) AS reviewed,
-        SUM(CASE WHEN sc.manual_direction_ok = 1 THEN 1 ELSE 0 END) AS direction_correct,
-        SUM(CASE WHEN sc.manual_result = 'tp1' THEN 1 ELSE 0 END) AS tp1_count,
-        SUM(CASE WHEN sc.manual_result = 'tp2' THEN 1 ELSE 0 END) AS tp2_count,
-        SUM(CASE WHEN sc.manual_result = 'sl' THEN 1 ELSE 0 END) AS sl_count
-      FROM signal_scores sc
-      WHERE sc.created_at >= NOW() - INTERVAL 30 DAY
-      GROUP BY DATE(sc.created_at)
-      ORDER BY DATE(sc.created_at) DESC
-    `);
-
-    const daily = dailyRows.map(r => ({
-      date: r.date,
-      total: Number(r.total),
-      reviewed: Number(r.reviewed),
-      direction_correct: Number(r.direction_correct),
-      tp1_count: Number(r.tp1_count),
-      tp2_count: Number(r.tp2_count),
-      sl_count: Number(r.sl_count),
-    }));
-
-    // 4. Confidence bazli kirilim (HIGH / MEDIUM / LOW)
+    // --- 5. Confidence bazli (certain only) ---
     const [byConfRows] = await pool.query(`
       SELECT
         sc.confidence,
         COUNT(*) AS total,
-        SUM(CASE WHEN sc.manual_direction_ok IS NOT NULL AND sc.manual_result IS NOT NULL THEN 1 ELSE 0 END) AS reviewed,
-        SUM(CASE WHEN sc.manual_direction_ok = 1 THEN 1 ELSE 0 END) AS direction_correct,
-        SUM(CASE WHEN sc.manual_result = 'tp1' THEN 1 ELSE 0 END) AS tp1_count,
-        SUM(CASE WHEN sc.manual_result = 'tp2' THEN 1 ELSE 0 END) AS tp2_count,
-        SUM(CASE WHEN sc.manual_result = 'sl' THEN 1 ELSE 0 END) AS sl_count
-      FROM signal_scores sc
+        SUM(so.direction_correct = 1) AS direction_correct,
+        SUM(${winExpr})  AS wins,
+        SUM(${lossExpr}) AS losses,
+        SUM(so.tp1_hit_ever = 1) AS tp1_hit,
+        SUM(so.tp2_hit_ever = 1) AS tp2_hit,
+        SUM(so.sl_hit_ever  = 1) AS sl_hit,
+        AVG(so.realized_pnl_pct) AS avg_pnl
+      FROM signal_outcomes so
+      JOIN signal_scores sc ON sc.id = so.signal_score_id
+      WHERE ${certainWhere}
       GROUP BY sc.confidence
     `);
-
     const by_confidence = {};
     for (const r of byConfRows) {
       by_confidence[r.confidence || 'UNKNOWN'] = {
         total: Number(r.total),
-        reviewed: Number(r.reviewed),
-        direction_correct: Number(r.direction_correct),
-        tp1_count: Number(r.tp1_count),
-        tp2_count: Number(r.tp2_count),
-        sl_count: Number(r.sl_count),
+        direction_correct: Number(r.direction_correct || 0),
+        wins: Number(r.wins || 0),
+        losses: Number(r.losses || 0),
+        tp1_hit: Number(r.tp1_hit || 0),
+        tp2_hit: Number(r.tp2_hit || 0),
+        sl_hit: Number(r.sl_hit || 0),
+        avg_pnl: r.avg_pnl == null ? null : Number(Number(r.avg_pnl).toFixed(2)),
       };
     }
 
-    // 5. Listing type bazli kirilim (spot, alpha, futures, spot-futures, alpha-futures vb.)
+    // --- 6. Listing type bazli (certain only) ---
     const [byListingRows] = await pool.query(`
       SELECT
         COALESCE(sn.listing_type, 'unknown') AS listing_type,
         COUNT(*) AS total,
-        SUM(CASE WHEN sc.manual_direction_ok IS NOT NULL AND sc.manual_result IS NOT NULL THEN 1 ELSE 0 END) AS reviewed,
-        SUM(CASE WHEN sc.manual_direction_ok = 1 THEN 1 ELSE 0 END) AS direction_correct,
-        SUM(CASE WHEN sc.manual_result = 'tp1' THEN 1 ELSE 0 END) AS tp1_count,
-        SUM(CASE WHEN sc.manual_result = 'tp2' THEN 1 ELSE 0 END) AS tp2_count,
-        SUM(CASE WHEN sc.manual_result = 'sl' THEN 1 ELSE 0 END) AS sl_count
-      FROM signal_scores sc
+        SUM(so.direction_correct = 1) AS direction_correct,
+        SUM(${winExpr})  AS wins,
+        SUM(${lossExpr}) AS losses,
+        SUM(so.tp1_hit_ever = 1) AS tp1_hit,
+        SUM(so.tp2_hit_ever = 1) AS tp2_hit,
+        SUM(so.sl_hit_ever  = 1) AS sl_hit,
+        AVG(so.realized_pnl_pct) AS avg_pnl
+      FROM signal_outcomes so
+      JOIN signal_scores sc ON sc.id = so.signal_score_id
       LEFT JOIN signal_snapshots sn ON sn.id = sc.signal_snapshot_id
+      WHERE ${certainWhere}
       GROUP BY COALESCE(sn.listing_type, 'unknown')
     `);
-
     const by_listing = {};
     for (const r of byListingRows) {
       by_listing[r.listing_type] = {
         total: Number(r.total),
-        reviewed: Number(r.reviewed),
-        direction_correct: Number(r.direction_correct),
-        tp1_count: Number(r.tp1_count),
-        tp2_count: Number(r.tp2_count),
-        sl_count: Number(r.sl_count),
+        direction_correct: Number(r.direction_correct || 0),
+        wins: Number(r.wins || 0),
+        losses: Number(r.losses || 0),
+        tp1_hit: Number(r.tp1_hit || 0),
+        tp2_hit: Number(r.tp2_hit || 0),
+        sl_hit: Number(r.sl_hit || 0),
+        avg_pnl: r.avg_pnl == null ? null : Number(Number(r.avg_pnl).toFixed(2)),
       };
     }
 
+    // --- 7. Gunluk detay (son 30 gun) ---
+    const [dailyRows] = await pool.query(`
+      SELECT
+        DATE(so.created_at) AS date,
+        COUNT(*) AS total,
+        SUM(so.direction IN ('LONG','SHORT')) AS certain_total,
+        SUM(so.direction = 'UNCERTAIN') AS uncertain_total,
+        SUM(so.is_completed = 1) AS completed,
+        SUM(so.direction IN ('LONG','SHORT') AND so.direction_correct = 1) AS direction_correct,
+        SUM(so.direction IN ('LONG','SHORT') AND ${winExpr}) AS wins,
+        SUM(so.direction IN ('LONG','SHORT') AND ${lossExpr}) AS losses,
+        SUM(so.tp1_hit_ever = 1) AS tp1_hit,
+        SUM(so.tp2_hit_ever = 1) AS tp2_hit,
+        SUM(so.sl_hit_ever  = 1) AS sl_hit,
+        AVG(so.realized_pnl_pct) AS avg_pnl
+      FROM signal_outcomes so
+      WHERE so.created_at >= NOW() - INTERVAL 30 DAY
+      GROUP BY DATE(so.created_at)
+      ORDER BY DATE(so.created_at) DESC
+    `);
+    const daily = dailyRows.map(r => ({
+      date: r.date,
+      total: Number(r.total),
+      certain_total: Number(r.certain_total || 0),
+      uncertain_total: Number(r.uncertain_total || 0),
+      completed: Number(r.completed || 0),
+      direction_correct: Number(r.direction_correct || 0),
+      wins: Number(r.wins || 0),
+      losses: Number(r.losses || 0),
+      tp1_hit: Number(r.tp1_hit || 0),
+      tp2_hit: Number(r.tp2_hit || 0),
+      sl_hit: Number(r.sl_hit || 0),
+      avg_pnl: r.avg_pnl == null ? null : Number(Number(r.avg_pnl).toFixed(2)),
+    }));
+
+    const num = (v) => Number(v || 0);
+    const round = (v) => v == null ? null : Number(Number(v).toFixed(2));
+
     res.json({
-      totals: {
-        total: Number(totals.total),
-        reviewed: Number(totals.reviewed),
-        pending: Number(totals.pending),
-        direction_correct: Number(totals.direction_correct),
-        tp1_count: Number(totals.tp1_count),
-        tp2_count: Number(totals.tp2_count),
-        sl_count: Number(totals.sl_count),
+      certain: {
+        total: num(certainTotals.total),
+        completed: num(certainTotals.completed),
+        pending: num(certainTotals.pending),
+        direction_correct: num(certainTotals.direction_correct),
+        wins: num(certainTotals.wins),
+        losses: num(certainTotals.losses),
+        neutrals: num(certainTotals.neutrals),
+        tp1_hit: num(certainTotals.tp1_hit),
+        tp2_hit: num(certainTotals.tp2_hit),
+        sl_hit: num(certainTotals.sl_hit),
+        avg_pnl: round(certainTotals.avg_pnl),
+        total_pnl: round(certainTotals.total_pnl),
       },
+      uncertain: {
+        total: num(uncertainTotals.total),
+        completed: num(uncertainTotals.completed),
+        pending: num(uncertainTotals.pending),
+        tp1_hit: num(uncertainTotals.tp1_hit),
+        tp2_hit: num(uncertainTotals.tp2_hit),
+        sl_hit: num(uncertainTotals.sl_hit),
+        avg_pnl: round(uncertainTotals.avg_pnl),
+        total_pnl: round(uncertainTotals.total_pnl),
+      },
+      by_final_result,
       by_source,
       by_confidence,
       by_listing,
