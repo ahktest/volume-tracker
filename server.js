@@ -127,6 +127,231 @@ function requireDashKey(req, res, next) {
 
 app.get("/ping", (req, res) => res.send("pong"));
 
+/* ────────────────────────────────────────────
+ * POSITIONS API (binance & bybit ortak)
+ * ──────────────────────────────────────────── */
+
+const EXCHANGE_CONFIG = {
+  binance: { table: 'futures_positions', balanceCol: 'total_futures_balance' },
+  bybit:   { table: 'bybitfuturepos',    balanceCol: 'total_balance' },
+};
+
+function getExchange(name) {
+  const cfg = EXCHANGE_CONFIG[name];
+  if (!cfg) {
+    const err = new Error(`unknown_exchange: ${name}`);
+    err.status = 400;
+    throw err;
+  }
+  return cfg;
+}
+
+// pnl - funding - commission (NULL guvenli)
+const PNL_EXPR = `pnl - IFNULL(funding_fee, 0) - IFNULL(commission, 0)`;
+
+/**
+ * GET /api/positions/:exchange/pnl?since_days=30
+ */
+app.get('/api/positions/:exchange/pnl', requireDashKey, async (req, res) => {
+  try {
+    const cfg = getExchange(req.params.exchange);
+    const { since_days = '30' } = req.query;
+    const { where, params } = buildWhereSinceDays(since_days);
+
+    const [dailyRows] = await pool.query(`
+      SELECT DATE(date2) AS date, SUM(${PNL_EXPR}) AS pnl
+      FROM \`${cfg.table}\`
+      WHERE ${where}
+      GROUP BY DATE(date2)
+      ORDER BY DATE(date2) ASC
+    `, params);
+
+    const [[wl]] = await pool.query(`
+      SELECT
+        SUM(CASE WHEN (${PNL_EXPR}) > 0 THEN 1 ELSE 0 END) AS wins,
+        SUM(CASE WHEN (${PNL_EXPR}) < 0 THEN 1 ELSE 0 END) AS losses,
+        COUNT(*) AS total,
+        SUM(${PNL_EXPR}) AS totalPnl
+      FROM \`${cfg.table}\`
+      WHERE ${where}
+    `, params);
+
+    const wins   = Number(wl.wins || 0);
+    const losses = Number(wl.losses || 0);
+    const total  = Number(wl.total || 0);
+    const totalPnl = Number(wl.totalPnl || 0);
+    const winRate = total > 0 ? (wins / total) * 100 : 0;
+
+    res.json({
+      daily: dailyRows.map(r => ({ date: r.date, pnl: Number(r.pnl || 0) })),
+      stats: {
+        wins, losses, total,
+        totalPnl: Number(totalPnl.toFixed(8)),
+        winRate: Number(winRate.toFixed(2)),
+      },
+    });
+  } catch (err) {
+    console.error('[/api/positions/:exchange/pnl] Hata:', err);
+    res.status(err.status || 500).json({ error: err.message || 'PNL verisi alinamadi' });
+  }
+});
+
+/**
+ * GET /api/positions/:exchange/summary?since_days=30
+ */
+app.get('/api/positions/:exchange/summary', requireDashKey, async (req, res) => {
+  try {
+    const cfg = getExchange(req.params.exchange);
+    const { since_days = '30' } = req.query;
+    const { where, params } = buildWhereSinceDays(since_days);
+
+    const [rows] = await pool.query(`
+      SELECT
+        COALESCE(source, 'unknown') AS source,
+        SUM(CASE WHEN (${PNL_EXPR}) > 0 THEN 1 ELSE 0 END) AS wins,
+        SUM(CASE WHEN (${PNL_EXPR}) < 0 THEN 1 ELSE 0 END) AS losses,
+        COUNT(*) AS total,
+        SUM(${PNL_EXPR}) AS pnl
+      FROM \`${cfg.table}\`
+      WHERE ${where}
+      GROUP BY COALESCE(source, 'unknown')
+    `, params);
+
+    const bySource = {};
+    for (const r of rows) {
+      const wins = Number(r.wins || 0);
+      const losses = Number(r.losses || 0);
+      const total = Number(r.total || 0);
+      const pnl = Number(r.pnl || 0);
+      const winRate = total > 0 ? (wins / total) * 100 : 0;
+      bySource[r.source] = {
+        wins, losses, total,
+        pnl: Number(pnl.toFixed(8)),
+        winRate: Number(winRate.toFixed(2)),
+      };
+    }
+
+    res.json({ bySource });
+  } catch (err) {
+    console.error('[/api/positions/:exchange/summary] Hata:', err);
+    res.status(err.status || 500).json({ error: err.message || 'Veri alinamadi' });
+  }
+});
+
+/**
+ * GET /api/positions/:exchange/daily?limit=14
+ */
+app.get('/api/positions/:exchange/daily', requireDashKey, async (req, res) => {
+  try {
+    const cfg = getExchange(req.params.exchange);
+    const limit = Math.min(Number(req.query.limit || 14) || 14, 60);
+
+    const [rows] = await pool.query(`
+      SELECT
+        DATE(date2) AS date,
+        SUM(CASE WHEN (${PNL_EXPR}) > 0 THEN 1 ELSE 0 END) AS wins,
+        SUM(CASE WHEN (${PNL_EXPR}) < 0 THEN 1 ELSE 0 END) AS losses,
+        SUM(${PNL_EXPR}) AS pnl
+      FROM \`${cfg.table}\`
+      WHERE status='CLOSED' AND pnl IS NOT NULL AND date2 IS NOT NULL
+      GROUP BY DATE(date2)
+      ORDER BY DATE(date2) DESC
+      LIMIT ?
+    `, [limit]);
+
+    res.json(rows.map(r => ({
+      date: r.date,
+      wins: Number(r.wins || 0),
+      losses: Number(r.losses || 0),
+      pnl: Number(r.pnl || 0),
+    })));
+  } catch (err) {
+    console.error('[/api/positions/:exchange/daily] Hata:', err);
+    res.status(err.status || 500).json({ error: err.message || 'Veri alinamadi' });
+  }
+});
+
+/**
+ * GET /api/positions/:exchange/balance-changes
+ */
+app.get('/api/positions/:exchange/balance-changes', requireDashKey, async (req, res) => {
+  try {
+    const cfg = getExchange(req.params.exchange);
+    const tbl = cfg.table, bc = cfg.balanceCol;
+
+    const sql = `
+      SELECT
+        (
+          (SELECT \`${bc}\` FROM \`${tbl}\`
+           WHERE status='CLOSED' AND \`${bc}\` IS NOT NULL
+             AND date2 >= UTC_TIMESTAMP() - INTERVAL 7 DAY
+           ORDER BY date2 DESC LIMIT 1)
+          -
+          (SELECT \`${bc}\` FROM \`${tbl}\`
+           WHERE status='CLOSED' AND \`${bc}\` IS NOT NULL
+             AND date2 >= UTC_TIMESTAMP() - INTERVAL 7 DAY
+           ORDER BY date2 ASC LIMIT 1)
+        ) AS diff_7d,
+        (
+          (SELECT \`${bc}\` FROM \`${tbl}\`
+           WHERE status='CLOSED' AND \`${bc}\` IS NOT NULL
+             AND date2 >= UTC_TIMESTAMP() - INTERVAL 30 DAY
+           ORDER BY date2 DESC LIMIT 1)
+          -
+          (SELECT \`${bc}\` FROM \`${tbl}\`
+           WHERE status='CLOSED' AND \`${bc}\` IS NOT NULL
+             AND date2 >= UTC_TIMESTAMP() - INTERVAL 30 DAY
+           ORDER BY date2 ASC LIMIT 1)
+        ) AS diff_30d,
+        (
+          (SELECT \`${bc}\` FROM \`${tbl}\`
+           WHERE status='CLOSED' AND \`${bc}\` IS NOT NULL
+             AND YEAR(date2) = YEAR(UTC_TIMESTAMP())
+           ORDER BY date2 DESC LIMIT 1)
+          -
+          (SELECT \`${bc}\` FROM \`${tbl}\`
+           WHERE status='CLOSED' AND \`${bc}\` IS NOT NULL
+             AND YEAR(date2) = YEAR(UTC_TIMESTAMP())
+           ORDER BY date2 ASC LIMIT 1)
+        ) AS diff_ytd
+    `;
+    const [[row]] = await pool.query(sql);
+    res.json({
+      diff_7d:  Number(row.diff_7d  || 0),
+      diff_30d: Number(row.diff_30d || 0),
+      diff_ytd: Number(row.diff_ytd || 0),
+    });
+  } catch (err) {
+    console.error('[/api/positions/:exchange/balance-changes] Hata:', err);
+    res.status(err.status || 500).json({ error: err.message || 'Veri alinamadi' });
+  }
+});
+
+/**
+ * GET /api/positions/:exchange/balance-history
+ */
+app.get('/api/positions/:exchange/balance-history', requireDashKey, async (req, res) => {
+  try {
+    const cfg = getExchange(req.params.exchange);
+    const [rows] = await pool.query(`
+      SELECT DATE(date2) AS date, MAX(\`${cfg.balanceCol}\`) AS balance
+      FROM \`${cfg.table}\`
+      WHERE status='CLOSED' AND \`${cfg.balanceCol}\` IS NOT NULL AND date2 IS NOT NULL
+      GROUP BY DATE(date2)
+      ORDER BY DATE(date2) ASC
+    `);
+    res.json(rows.map(r => ({ date: r.date, balance: Number(r.balance || 0) })));
+  } catch (err) {
+    console.error('[/api/positions/:exchange/balance-history] Hata:', err);
+    res.status(err.status || 500).json({ error: err.message || 'Balance verisi alinamadi' });
+  }
+});
+
+/* ────────────────────────────────────────────
+ * LEGACY: /api/futures-* (binance icin geriye donuk uyumluluk)
+ * Yeni kod /api/positions/binance/... kullanmali
+ * ──────────────────────────────────────────── */
+
 /**
  * helpers: where builder (since_days)
  */

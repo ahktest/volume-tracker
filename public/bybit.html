@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
   <meta charset="utf-8"/>
-  <title>Binance Futures PNL</title>
+  <title>Bybit Futures PNL</title>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <link rel="icon" href="favicon.png" type="image/x-icon"/>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -30,7 +30,7 @@
     /* ─── Layout ─── */
     .container{max-width:1200px;margin:0 auto;padding:20px 16px}
     .header-bar{display:flex;align-items:center;justify-content:space-between;padding:16px 0;border-bottom:1px solid #1f2937;margin-bottom:24px}
-    .header-bar h1{font-size:1.4rem;color:#93c5fd}
+    .header-bar h1{font-size:1.4rem;color:#fbbf24}
     .header-bar .sub{color:#6b7280;font-size:13px;margin-top:2px}
     .header-bar .logout{padding:6px 14px;background:#374151;color:#9ca3af;border:none;border-radius:6px;cursor:pointer;font-size:13px}
     .header-bar .logout:hover{background:#4b5563;color:#e5e7eb}
@@ -45,7 +45,7 @@
 
     /* ─── Cards ─── */
     .card{background:#111827;border-radius:12px;border:1px solid #1f2937;padding:18px 20px;margin-bottom:16px}
-    .card h2{font-size:14px;color:#93c5fd;margin-bottom:12px;font-weight:600}
+    .card h2{font-size:14px;color:#fbbf24;margin-bottom:12px;font-weight:600}
 
     /* ─── KPI ─── */
     .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
@@ -54,9 +54,8 @@
     .kpi .value{font-size:1.5rem;font-weight:700}
     .pos{color:#34d399}.neg{color:#f87171}
 
-    /* ─── Grid ─── */
-    .grid-2{display:grid;grid-template-columns:1fr;gap:16px}
-    @media(min-width:900px){.grid-2{grid-template-columns:1fr 1fr}}
+    /* ─── Source grid (dinamik) ─── */
+    .source-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
 
     /* ─── Chart ─── */
     .chart-wrap{height:380px;margin-top:12px}
@@ -71,7 +70,6 @@
 
     .muted{color:#6b7280;font-size:12px;margin-top:8px}
 
-    /* ─── Responsive ─── */
     @media(max-width:650px){
       .kpi-row{grid-template-columns:1fr}
       .kpi .value{font-size:1.2rem}
@@ -80,29 +78,26 @@
 </head>
 <body>
 
-<!-- ═══════ LOGIN ═══════ -->
 <div class="login-overlay" id="loginOverlay">
   <div class="login-box">
-    <h2>Binance Futures PNL</h2>
+    <h2>Bybit Futures PNL</h2>
     <input type="password" id="passInput" placeholder="Parola" autocomplete="off"/>
     <button onclick="doLogin()">Gir</button>
     <div class="login-error" id="loginErr">Parola yanlis</div>
   </div>
 </div>
 
-<!-- ═══════ NAV ═══════ -->
 <nav class="top-nav" id="topNav" style="display:none">
-  <a href="resultworker.html" class="active">Binance PNL</a>
-  <a href="bybit.html">Bybit PNL</a>
+  <a href="resultworker.html">Binance PNL</a>
+  <a href="bybit.html" class="active">Bybit PNL</a>
   <a href="signals.html">Signal Scores</a>
 </nav>
 
-<!-- ═══════ MAIN ═══════ -->
 <div class="container" id="mainApp" style="display:none">
 
   <div class="header-bar">
     <div>
-      <h1>Binance Futures PNL</h1>
+      <h1>Bybit Futures PNL</h1>
       <div class="sub">Kapanan pozisyonlara gore performans</div>
     </div>
     <button class="logout" onclick="doLogout()">Logout</button>
@@ -145,46 +140,15 @@
     <div class="muted">PNL = pnl - funding_fee - commission</div>
   </div>
 
-  <!-- 2) Funding vs Normal -->
-  <div class="grid-2">
-    <div class="card">
-      <h2>Normal (source=normal)</h2>
-      <div class="kpi-row">
-        <div class="kpi">
-          <div class="label">PNL</div>
-          <div id="normalPnl" class="value">—</div>
-        </div>
-        <div class="kpi">
-          <div class="label">Win / Loss</div>
-          <div id="normalWl" class="value">—</div>
-        </div>
-        <div class="kpi">
-          <div class="label">Win Rate</div>
-          <div id="normalWr" class="value">—</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h2>Funding (source=funding)</h2>
-      <div class="kpi-row">
-        <div class="kpi">
-          <div class="label">PNL</div>
-          <div id="fundingPnl" class="value">—</div>
-        </div>
-        <div class="kpi">
-          <div class="label">Win / Loss</div>
-          <div id="fundingWl" class="value">—</div>
-        </div>
-        <div class="kpi">
-          <div class="label">Win Rate</div>
-          <div id="fundingWr" class="value">—</div>
-        </div>
-      </div>
+  <!-- 2) Source breakdown (dinamik) -->
+  <div class="card">
+    <h2>Source Bazli Kirilim</h2>
+    <div class="source-grid" id="sourceGrid">
+      <div class="muted">Yukleniyor...</div>
     </div>
   </div>
 
-  <!-- 3) Balance degisimi -->
+  <!-- 3) Balance changes -->
   <div class="card">
     <h2>Total Balance Change</h2>
     <div class="kpi-row">
@@ -201,10 +165,10 @@
         <div id="balYtd" class="value">—</div>
       </div>
     </div>
-    <div class="muted">total_futures_balance: ilgili periyottaki ilk ve son deger farki</div>
+    <div class="muted">total_balance: ilgili periyottaki ilk ve son deger farki</div>
   </div>
 
-  <!-- 4) Gunluk tablo -->
+  <!-- 4) Daily table -->
   <div class="card">
     <h2>Gunluk Win/Loss & PNL</h2>
     <div class="table-wrap">
@@ -224,28 +188,26 @@
     </div>
   </div>
 
-  <!-- 5) Balance Chart -->
+  <!-- 5) Balance chart -->
   <div class="card">
     <h2>Total Balance (Equity Curve)</h2>
     <div class="chart-wrap">
       <canvas id="balanceChart"></canvas>
     </div>
-    <div class="muted">Gunluk kapanislara gore total_futures_balance</div>
+    <div class="muted">Gunluk kapanislara gore total_balance</div>
   </div>
 
 </div>
 
 <script>
 let DASH_KEY = '';
-const EXCHANGE = 'binance';
+const EXCHANGE = 'bybit';
 const API_BASE = `/api/positions/${EXCHANGE}`;
 
-// ─── Login ───
 function doLogin() {
   const v = document.getElementById('passInput').value.trim();
   if (!v) return;
   DASH_KEY = v;
-  // test API
   fetch(`${API_BASE}/pnl?since_days=7`, { headers: { 'x-dash-key': DASH_KEY } })
     .then(r => {
       if (!r.ok) throw new Error();
@@ -270,7 +232,6 @@ function doLogout() {
   document.getElementById('loginOverlay').style.display = 'flex';
 }
 
-// Auto-login
 (function() {
   const saved = sessionStorage.getItem('pnl_key');
   if (saved) {
@@ -283,58 +244,36 @@ function doLogout() {
   });
 })();
 
-// ─── Helpers ───
 const el = (id) => document.getElementById(id);
 
 function formatDateTR(d) {
   const date = new Date(d);
   return String(date.getDate()).padStart(2,'0') + '.' + String(date.getMonth()+1).padStart(2,'0') + '.' + date.getFullYear();
 }
-
 function formatDateShort(d) {
   const date = new Date(d);
   return String(date.getDate()).padStart(2,'0') + '.' + String(date.getMonth()+1).padStart(2,'0');
 }
-
-function fmtNum(n, digits=4) {
-  return Number(n || 0).toFixed(digits);
-}
-
+function fmtNum(n, digits=4) { return Number(n || 0).toFixed(digits); }
 function setValue(elm, n, digits=4) {
   const num = Number(n || 0);
   elm.textContent = fmtNum(num, digits);
   elm.className = 'value ' + (num >= 0 ? 'pos' : 'neg');
 }
-
 async function apiGet(path) {
   const res = await fetch(path, { headers: { 'x-dash-key': DASH_KEY } });
   if (!res.ok) throw new Error(`API error (${res.status})`);
   return res.json();
 }
 
-// ─── Chart theme ───
-const chartColors = {
-  line: '#60a5fa',
-  grid: '#1f2937',
-  text: '#6b7280',
-  bg: 'rgba(96, 165, 250, 0.08)',
-};
-
+const chartColors = { line: '#fbbf24', grid: '#1f2937', text: '#6b7280', bg: 'rgba(251, 191, 36, 0.08)' };
 function darkScales() {
   return {
-    x: {
-      ticks: { color: chartColors.text, font: { size: 11 } },
-      grid: { color: chartColors.grid },
-      title: { display: true, text: 'Tarih', color: chartColors.text }
-    },
-    y: {
-      ticks: { color: chartColors.text, font: { size: 11 } },
-      grid: { color: chartColors.grid },
-    }
+    x: { ticks: { color: chartColors.text, font: { size: 11 } }, grid: { color: chartColors.grid }, title: { display: true, text: 'Tarih', color: chartColors.text } },
+    y: { ticks: { color: chartColors.text, font: { size: 11 } }, grid: { color: chartColors.grid } }
   };
 }
 
-// ─── Charts ───
 const ctx = document.getElementById('pnlChart').getContext('2d');
 let chart;
 const balanceCtx = document.getElementById('balanceChart').getContext('2d');
@@ -344,35 +283,14 @@ function buildChart(labels, cumulative) {
   if (chart) chart.destroy();
   chart = new Chart(ctx, {
     type: 'line',
-    data: {
-      labels,
-      datasets: [{
-        label: 'Cumulative PNL',
-        data: cumulative,
-        borderColor: chartColors.line,
-        backgroundColor: chartColors.bg,
-        borderWidth: 2,
-        tension: 0.3,
-        pointRadius: 0,
-        fill: true,
-      }]
-    },
+    data: { labels, datasets: [{ label: 'Cumulative PNL', data: cumulative, borderColor: chartColors.line, backgroundColor: chartColors.bg, borderWidth: 2, tension: 0.3, pointRadius: 0, fill: true }] },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
+      responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: '#1f2937',
-          titleColor: '#e5e7eb',
-          bodyColor: '#e5e7eb',
-          borderColor: '#374151',
-          borderWidth: 1,
-          callbacks: {
-            title: (items) => formatDateTR(items[0].label),
-            label: (item) => `PNL: ${Number(item.raw).toFixed(4)}`
-          }
+          backgroundColor: '#1f2937', titleColor: '#e5e7eb', bodyColor: '#e5e7eb', borderColor: '#374151', borderWidth: 1,
+          callbacks: { title: (items) => formatDateTR(items[0].label), label: (item) => `PNL: ${Number(item.raw).toFixed(4)}` }
         }
       },
       scales: { ...darkScales(), y: { ...darkScales().y, title: { display: true, text: 'PNL', color: chartColors.text } } }
@@ -384,35 +302,14 @@ function buildBalanceChart(labels, data) {
   if (balanceChart) balanceChart.destroy();
   balanceChart = new Chart(balanceCtx, {
     type: 'line',
-    data: {
-      labels,
-      datasets: [{
-        label: 'Total Balance',
-        data,
-        borderColor: '#34d399',
-        backgroundColor: 'rgba(52, 211, 153, 0.08)',
-        borderWidth: 2,
-        tension: 0.25,
-        pointRadius: 0,
-        fill: true,
-      }]
-    },
+    data: { labels, datasets: [{ label: 'Total Balance', data, borderColor: '#34d399', backgroundColor: 'rgba(52, 211, 153, 0.08)', borderWidth: 2, tension: 0.25, pointRadius: 0, fill: true }] },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
+      responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: '#1f2937',
-          titleColor: '#e5e7eb',
-          bodyColor: '#e5e7eb',
-          borderColor: '#374151',
-          borderWidth: 1,
-          callbacks: {
-            title: (items) => formatDateTR(items[0].label),
-            label: (item) => `Balance: ${Number(item.raw).toFixed(4)}`
-          }
+          backgroundColor: '#1f2937', titleColor: '#e5e7eb', bodyColor: '#e5e7eb', borderColor: '#374151', borderWidth: 1,
+          callbacks: { title: (items) => formatDateTR(items[0].label), label: (item) => `Balance: ${Number(item.raw).toFixed(4)}` }
         }
       },
       scales: { ...darkScales(), y: { ...darkScales().y, title: { display: true, text: 'Balance', color: chartColors.text } } }
@@ -420,7 +317,31 @@ function buildBalanceChart(labels, data) {
   });
 }
 
-// ─── Load ───
+function renderSourceGrid(bySource) {
+  const grid = el('sourceGrid');
+  const entries = Object.entries(bySource || {});
+  if (!entries.length) {
+    grid.innerHTML = '<div class="muted">Kayit yok</div>';
+    return;
+  }
+  // Toplam adede gore sirala
+  entries.sort((a, b) => b[1].total - a[1].total);
+
+  grid.innerHTML = entries.map(([src, d]) => {
+    const pnl = Number(d.pnl || 0);
+    const wr  = Number(d.winRate || 0);
+    return `
+    <div class="kpi">
+      <div class="label">${src} (${d.total} pos)</div>
+      <div class="value ${pnl >= 0 ? 'pos' : 'neg'}" style="font-size:1.3rem">${pnl.toFixed(4)}</div>
+      <div style="margin-top:6px;font-size:12px;color:#9ca3af">
+        ${d.wins}W / ${d.losses}L &middot;
+        <span class="${wr >= 50 ? 'pos' : 'neg'}">${wr.toFixed(2)}%</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 async function loadAll() {
   const sinceDays = el('sinceDays').value;
 
@@ -444,21 +365,9 @@ async function loadAll() {
   el('kpiWr').className = 'value ' + (Number(stats.winRate) >= 50 ? 'pos' : 'neg');
   buildChart(labels, cumulative);
 
-  // 2) Funding vs Normal
+  // 2) Source breakdown
   const sum = await apiGet(`${API_BASE}/summary?since_days=${encodeURIComponent(sinceDays)}`);
-  const bySource = (sum && sum.bySource) ? sum.bySource : {};
-  const normal = bySource.normal || { wins:0, losses:0, winRate:0, pnl:0 };
-  const funding = bySource.funding || { wins:0, losses:0, winRate:0, pnl:0 };
-
-  setValue(el('normalPnl'), normal.pnl, 4);
-  el('normalWl').textContent = `${normal.wins}W / ${normal.losses}L`;
-  el('normalWr').textContent = `${Number(normal.winRate || 0).toFixed(2)}%`;
-  el('normalWr').className = 'value ' + (Number(normal.winRate) >= 50 ? 'pos' : 'neg');
-
-  setValue(el('fundingPnl'), funding.pnl, 4);
-  el('fundingWl').textContent = `${funding.wins}W / ${funding.losses}L`;
-  el('fundingWr').textContent = `${Number(funding.winRate || 0).toFixed(2)}%`;
-  el('fundingWr').className = 'value ' + (Number(funding.winRate) >= 50 ? 'pos' : 'neg');
+  renderSourceGrid(sum.bySource || {});
 
   // 3) Balance changes
   const bal = await apiGet(`${API_BASE}/balance-changes`);
