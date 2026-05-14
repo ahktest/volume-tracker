@@ -337,10 +337,13 @@ function darkScales() {
 // ─── Charts ───
 const ctx = document.getElementById('pnlChart').getContext('2d');
 let chart;
+let chartFullDates = [];
 const balanceCtx = document.getElementById('balanceChart').getContext('2d');
 let balanceChart;
+let balanceFullDates = [];
 
-function buildChart(labels, cumulative) {
+function buildChart(labels, cumulative, fullDates) {
+  chartFullDates = fullDates || [];
   if (chart) chart.destroy();
   chart = new Chart(ctx, {
     type: 'line',
@@ -370,7 +373,7 @@ function buildChart(labels, cumulative) {
           borderColor: '#374151',
           borderWidth: 1,
           callbacks: {
-            title: (items) => formatDateTR(items[0].label),
+            title: (items) => formatDateTR(chartFullDates[items[0].dataIndex] ?? items[0].label),
             label: (item) => `PNL: ${Number(item.raw).toFixed(4)}`
           }
         }
@@ -380,7 +383,8 @@ function buildChart(labels, cumulative) {
   });
 }
 
-function buildBalanceChart(labels, data) {
+function buildBalanceChart(labels, data, fullDates) {
+  balanceFullDates = fullDates || [];
   if (balanceChart) balanceChart.destroy();
   balanceChart = new Chart(balanceCtx, {
     type: 'line',
@@ -410,7 +414,7 @@ function buildBalanceChart(labels, data) {
           borderColor: '#374151',
           borderWidth: 1,
           callbacks: {
-            title: (items) => formatDateTR(items[0].label),
+            title: (items) => formatDateTR(balanceFullDates[items[0].dataIndex] ?? items[0].label),
             label: (item) => `Balance: ${Number(item.raw).toFixed(4)}`
           }
         }
@@ -430,10 +434,12 @@ async function loadAll() {
   const stats = pnlData.stats || { wins:0, losses:0, total:0, winRate:0, totalPnl:0 };
 
   const labels = [];
+  const fullDates = [];
   let total = 0;
   const cumulative = [];
   for (const r of rows) {
     labels.push(formatDateShort(r.date));
+    fullDates.push(r.date);
     total += Number(r.pnl || 0);
     cumulative.push(Number(total.toFixed(8)));
   }
@@ -442,7 +448,7 @@ async function loadAll() {
   el('kpiWl').textContent = `${stats.wins}W / ${stats.losses}L`;
   el('kpiWr').textContent = `${Number(stats.winRate || 0).toFixed(2)}%`;
   el('kpiWr').className = 'value ' + (Number(stats.winRate) >= 50 ? 'pos' : 'neg');
-  buildChart(labels, cumulative);
+  buildChart(labels, cumulative, fullDates);
 
   // 2) Funding vs Normal
   const sum = await apiGet(`${API_BASE}/summary?since_days=${encodeURIComponent(sinceDays)}`);
@@ -473,7 +479,11 @@ async function loadAll() {
 
   // 5) Balance chart
   const balHist = await apiGet(`${API_BASE}/balance-history`);
-  buildBalanceChart(balHist.map(r => formatDateShort(r.date)), balHist.map(r => r.balance));
+  buildBalanceChart(
+    balHist.map(r => formatDateShort(r.date)),
+    balHist.map(r => r.balance),
+    balHist.map(r => r.date)
+  );
 
   if (!daily.length) {
     tbody.innerHTML = '<tr><td colspan="4" class="muted">Kayit yok</td></tr>';
