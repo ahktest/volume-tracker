@@ -185,46 +185,7 @@
     </div>
   </div>
 
-  <!-- 3) Spot vs Alpha -->
-  <div class="grid-2">
-    <div class="card">
-      <h2>Spot (market contains spot)</h2>
-      <div class="kpi-row">
-        <div class="kpi">
-          <div class="label">PNL</div>
-          <div id="spotPnl" class="value">—</div>
-        </div>
-        <div class="kpi">
-          <div class="label">Win / Loss</div>
-          <div id="spotWl" class="value">—</div>
-        </div>
-        <div class="kpi">
-          <div class="label">Win Rate</div>
-          <div id="spotWr" class="value">—</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h2>Alpha (market contains alpha)</h2>
-      <div class="kpi-row">
-        <div class="kpi">
-          <div class="label">PNL</div>
-          <div id="alphaPnl" class="value">—</div>
-        </div>
-        <div class="kpi">
-          <div class="label">Win / Loss</div>
-          <div id="alphaWl" class="value">—</div>
-        </div>
-        <div class="kpi">
-          <div class="label">Win Rate</div>
-          <div id="alphaWr" class="value">—</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- 4) Strategy -->
+  <!-- 3) Strategy -->
   <div class="grid-2">
     <div class="card">
       <h2>short_fade</h2>
@@ -258,6 +219,65 @@
         <div class="kpi">
           <div class="label">Win Rate</div>
           <div id="pumpLongWr" class="value">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4) Spot vs Alpha (+ Long/Short kirilimi) -->
+  <div class="grid-2">
+    <div class="card">
+      <h2>Spot (market contains spot)</h2>
+      <div class="kpi-row" style="margin-bottom:12px">
+        <div class="kpi">
+          <div class="label">PNL</div>
+          <div id="spotPnl" class="value">—</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Win / Loss</div>
+          <div id="spotWl" class="value">—</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Win Rate</div>
+          <div id="spotWr" class="value">—</div>
+        </div>
+      </div>
+      <div class="kpi-row">
+        <div class="kpi">
+          <div class="label">Long W / L</div>
+          <div id="spotLongWl" class="value">—</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Short W / L</div>
+          <div id="spotShortWl" class="value">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Alpha (market contains alpha)</h2>
+      <div class="kpi-row" style="margin-bottom:12px">
+        <div class="kpi">
+          <div class="label">PNL</div>
+          <div id="alphaPnl" class="value">—</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Win / Loss</div>
+          <div id="alphaWl" class="value">—</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Win Rate</div>
+          <div id="alphaWr" class="value">—</div>
+        </div>
+      </div>
+      <div class="kpi-row">
+        <div class="kpi">
+          <div class="label">Long W / L</div>
+          <div id="alphaLongWl" class="value">—</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Short W / L</div>
+          <div id="alphaShortWl" class="value">—</div>
         </div>
       </div>
     </div>
@@ -390,6 +410,14 @@ function fillBucket(prefix, data) {
   el(`${prefix}Wl`).textContent = `${Number(d.wins || 0)}W / ${Number(d.losses || 0)}L`;
   el(`${prefix}Wr`).textContent = `${Number(d.winRate || 0).toFixed(2)}%`;
   el(`${prefix}Wr`).className = 'value ' + (Number(d.winRate) >= 50 ? 'pos' : 'neg');
+}
+
+function fillWl(elmId, data) {
+  const d = data || { wins:0, losses:0, winRate:0 };
+  const wins = Number(d.wins || 0), losses = Number(d.losses || 0);
+  const elm = el(elmId);
+  elm.textContent = `${wins}W / ${losses}L`;
+  elm.className = 'value ' + (Number(d.winRate) >= 50 ? 'pos' : 'neg');
 }
 
 async function apiGet(path) {
@@ -541,6 +569,7 @@ async function loadAll() {
   const byDirection = br.byDirection || {};
   const byStrategy  = br.byStrategy  || {};
   const byListing   = br.byListing   || {};
+  const byLD        = br.byListingDirection || {};
 
   fillBucket('long',       byDirection.LONG);
   fillBucket('short',      byDirection.SHORT);
@@ -548,6 +577,12 @@ async function loadAll() {
   fillBucket('alpha',      byListing.alpha);
   fillBucket('shortFade',  byStrategy.short_fade);
   fillBucket('pumpLong',   byStrategy.pump_long);
+
+  // Spot/Alpha icinde Long/Short W/L
+  fillWl('spotLongWl',   byLD.spot_LONG);
+  fillWl('spotShortWl',  byLD.spot_SHORT);
+  fillWl('alphaLongWl',  byLD.alpha_LONG);
+  fillWl('alphaShortWl', byLD.alpha_SHORT);
 
   // 3) Balance changes
   const bal = await apiGet(`${API_BASE}/balance-changes`);

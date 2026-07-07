@@ -394,13 +394,14 @@ app.get('/api/positions/binancefable/breakdown', requireDashKey, async (req, res
       return out;
     };
 
-    const [byDirection, byStrategy, byListing] = await Promise.all([
+    const [byDirection, byStrategy, byListing, byListingDirection] = await Promise.all([
       runBreakdown('direction'),
       runBreakdown('strategy'),
       runBreakdown(listingExpr),
+      runBreakdown(`CONCAT(${listingExpr}, '_', direction)`),
     ]);
 
-    res.json({ byDirection, byStrategy, byListing });
+    res.json({ byDirection, byStrategy, byListing, byListingDirection });
   } catch (err) {
     console.error('[/api/positions/binancefable/breakdown] Hata:', err);
     res.status(err.status || 500).json({ error: err.message || 'Breakdown alinamadi' });
