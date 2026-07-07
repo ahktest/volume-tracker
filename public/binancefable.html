@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
   <meta charset="utf-8"/>
-  <title>Binance Futures PNL</title>
+  <title>Binance Fable PNL</title>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <link rel="icon" href="favicon.png" type="image/x-icon"/>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -83,7 +83,7 @@
 <!-- ═══════ LOGIN ═══════ -->
 <div class="login-overlay" id="loginOverlay">
   <div class="login-box">
-    <h2>Binance Futures PNL</h2>
+    <h2>Binance Fable PNL</h2>
     <input type="password" id="passInput" placeholder="Parola" autocomplete="off"/>
     <button onclick="doLogin()">Gir</button>
     <div class="login-error" id="loginErr">Parola yanlis</div>
@@ -92,9 +92,9 @@
 
 <!-- ═══════ NAV ═══════ -->
 <nav class="top-nav" id="topNav" style="display:none">
-  <a href="resultworker.html" class="active">Binance PNL</a>
+  <a href="resultworker.html">Binance PNL</a>
   <a href="bybit.html">Bybit PNL</a>
-  <a href="binancefable.html">Binance Fable</a>
+  <a href="binancefable.html" class="active">Binance Fable</a>
   <a href="signals.html">Signal Scores</a>
 </nav>
 
@@ -103,8 +103,8 @@
 
   <div class="header-bar">
     <div>
-      <h1>Binance Futures PNL</h1>
-      <div class="sub">Kapanan pozisyonlara gore performans</div>
+      <h1>Binance Fable PNL</h1>
+      <div class="sub">tradefable tablosu · Kapanan pozisyonlara gore performans</div>
     </div>
     <button class="logout" onclick="doLogout()">Logout</button>
   </div>
@@ -146,46 +146,124 @@
     <div class="muted">PNL = pnl - funding_fee - commission</div>
   </div>
 
-  <!-- 2) Funding vs Normal -->
+  <!-- 2) Long vs Short -->
   <div class="grid-2">
     <div class="card">
-      <h2>Normal (source=normal)</h2>
+      <h2>LONG (direction=LONG)</h2>
       <div class="kpi-row">
         <div class="kpi">
           <div class="label">PNL</div>
-          <div id="normalPnl" class="value">—</div>
+          <div id="longPnl" class="value">—</div>
         </div>
         <div class="kpi">
           <div class="label">Win / Loss</div>
-          <div id="normalWl" class="value">—</div>
+          <div id="longWl" class="value">—</div>
         </div>
         <div class="kpi">
           <div class="label">Win Rate</div>
-          <div id="normalWr" class="value">—</div>
+          <div id="longWr" class="value">—</div>
         </div>
       </div>
     </div>
 
     <div class="card">
-      <h2>Funding (source=funding)</h2>
+      <h2>SHORT (direction=SHORT)</h2>
       <div class="kpi-row">
         <div class="kpi">
           <div class="label">PNL</div>
-          <div id="fundingPnl" class="value">—</div>
+          <div id="shortPnl" class="value">—</div>
         </div>
         <div class="kpi">
           <div class="label">Win / Loss</div>
-          <div id="fundingWl" class="value">—</div>
+          <div id="shortWl" class="value">—</div>
         </div>
         <div class="kpi">
           <div class="label">Win Rate</div>
-          <div id="fundingWr" class="value">—</div>
+          <div id="shortWr" class="value">—</div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- 3) Balance degisimi -->
+  <!-- 3) Spot vs Alpha -->
+  <div class="grid-2">
+    <div class="card">
+      <h2>Spot (market contains spot)</h2>
+      <div class="kpi-row">
+        <div class="kpi">
+          <div class="label">PNL</div>
+          <div id="spotPnl" class="value">—</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Win / Loss</div>
+          <div id="spotWl" class="value">—</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Win Rate</div>
+          <div id="spotWr" class="value">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Alpha (market contains alpha)</h2>
+      <div class="kpi-row">
+        <div class="kpi">
+          <div class="label">PNL</div>
+          <div id="alphaPnl" class="value">—</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Win / Loss</div>
+          <div id="alphaWl" class="value">—</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Win Rate</div>
+          <div id="alphaWr" class="value">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4) Strategy -->
+  <div class="grid-2">
+    <div class="card">
+      <h2>short_fade</h2>
+      <div class="kpi-row">
+        <div class="kpi">
+          <div class="label">PNL</div>
+          <div id="shortFadePnl" class="value">—</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Win / Loss</div>
+          <div id="shortFadeWl" class="value">—</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Win Rate</div>
+          <div id="shortFadeWr" class="value">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>pump_long</h2>
+      <div class="kpi-row">
+        <div class="kpi">
+          <div class="label">PNL</div>
+          <div id="pumpLongPnl" class="value">—</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Win / Loss</div>
+          <div id="pumpLongWl" class="value">—</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Win Rate</div>
+          <div id="pumpLongWr" class="value">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5) Balance degisimi -->
   <div class="card">
     <h2>Total Balance Change</h2>
     <div class="kpi-row">
@@ -202,10 +280,10 @@
         <div id="balYtd" class="value">—</div>
       </div>
     </div>
-    <div class="muted">total_futures_balance: ilgili periyottaki ilk ve son deger farki</div>
+    <div class="muted">totalfuturebalance: ilgili periyottaki ilk ve son deger farki</div>
   </div>
 
-  <!-- 4) Gunluk tablo -->
+  <!-- 6) Gunluk tablo -->
   <div class="card">
     <h2>Gunluk Win/Loss & PNL</h2>
     <div class="table-wrap">
@@ -225,20 +303,20 @@
     </div>
   </div>
 
-  <!-- 5) Balance Chart -->
+  <!-- 7) Balance Chart -->
   <div class="card">
     <h2>Total Balance (Equity Curve)</h2>
     <div class="chart-wrap">
       <canvas id="balanceChart"></canvas>
     </div>
-    <div class="muted">Gunluk kapanislara gore total_futures_balance</div>
+    <div class="muted">Gunluk kapanislara gore totalfuturebalance</div>
   </div>
 
 </div>
 
 <script>
 let DASH_KEY = '';
-const EXCHANGE = 'binance';
+const EXCHANGE = 'binancefable';
 const API_BASE = `/api/positions/${EXCHANGE}`;
 
 // ─── Login ───
@@ -246,7 +324,6 @@ function doLogin() {
   const v = document.getElementById('passInput').value.trim();
   if (!v) return;
   DASH_KEY = v;
-  // test API
   fetch(`${API_BASE}/pnl?since_days=7`, { headers: { 'x-dash-key': DASH_KEY } })
     .then(r => {
       if (!r.ok) throw new Error();
@@ -305,6 +382,14 @@ function setValue(elm, n, digits=4) {
   const num = Number(n || 0);
   elm.textContent = fmtNum(num, digits);
   elm.className = 'value ' + (num >= 0 ? 'pos' : 'neg');
+}
+
+function fillBucket(prefix, data) {
+  const d = data || { wins:0, losses:0, winRate:0, pnl:0 };
+  setValue(el(`${prefix}Pnl`), d.pnl, 4);
+  el(`${prefix}Wl`).textContent = `${Number(d.wins || 0)}W / ${Number(d.losses || 0)}L`;
+  el(`${prefix}Wr`).textContent = `${Number(d.winRate || 0).toFixed(2)}%`;
+  el(`${prefix}Wr`).className = 'value ' + (Number(d.winRate) >= 50 ? 'pos' : 'neg');
 }
 
 async function apiGet(path) {
@@ -451,21 +536,18 @@ async function loadAll() {
   el('kpiWr').className = 'value ' + (Number(stats.winRate) >= 50 ? 'pos' : 'neg');
   buildChart(labels, cumulative, fullDates);
 
-  // 2) Funding vs Normal
-  const sum = await apiGet(`${API_BASE}/summary?since_days=${encodeURIComponent(sinceDays)}`);
-  const bySource = (sum && sum.bySource) ? sum.bySource : {};
-  const normal = bySource.normal || { wins:0, losses:0, winRate:0, pnl:0 };
-  const funding = bySource.funding || { wins:0, losses:0, winRate:0, pnl:0 };
+  // 2) Breakdown (direction / strategy / listing)
+  const br = await apiGet(`${API_BASE}/breakdown?since_days=${encodeURIComponent(sinceDays)}`);
+  const byDirection = br.byDirection || {};
+  const byStrategy  = br.byStrategy  || {};
+  const byListing   = br.byListing   || {};
 
-  setValue(el('normalPnl'), normal.pnl, 4);
-  el('normalWl').textContent = `${normal.wins}W / ${normal.losses}L`;
-  el('normalWr').textContent = `${Number(normal.winRate || 0).toFixed(2)}%`;
-  el('normalWr').className = 'value ' + (Number(normal.winRate) >= 50 ? 'pos' : 'neg');
-
-  setValue(el('fundingPnl'), funding.pnl, 4);
-  el('fundingWl').textContent = `${funding.wins}W / ${funding.losses}L`;
-  el('fundingWr').textContent = `${Number(funding.winRate || 0).toFixed(2)}%`;
-  el('fundingWr').className = 'value ' + (Number(funding.winRate) >= 50 ? 'pos' : 'neg');
+  fillBucket('long',       byDirection.LONG);
+  fillBucket('short',      byDirection.SHORT);
+  fillBucket('spot',       byListing.spot);
+  fillBucket('alpha',      byListing.alpha);
+  fillBucket('shortFade',  byStrategy.short_fade);
+  fillBucket('pumpLong',   byStrategy.pump_long);
 
   // 3) Balance changes
   const bal = await apiGet(`${API_BASE}/balance-changes`);

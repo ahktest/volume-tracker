@@ -132,8 +132,9 @@ app.get("/ping", (req, res) => res.send("pong"));
  * ──────────────────────────────────────────── */
 
 const EXCHANGE_CONFIG = {
-  binance: { table: 'futures_positions', balanceCol: 'total_futures_balance' },
-  bybit:   { table: 'bybitfuturepos',    balanceCol: 'total_balance' },
+  binance:      { table: 'futures_positions', balanceCol: 'total_futures_balance' },
+  bybit:        { table: 'bybitfuturepos',    balanceCol: 'total_balance' },
+  binancefable: { table: 'tradefable',        balanceCol: 'totalfuturebalance' },
 };
 
 function getExchange(name) {
@@ -344,6 +345,65 @@ app.get('/api/positions/:exchange/balance-history', requireDashKey, async (req, 
   } catch (err) {
     console.error('[/api/positions/:exchange/balance-history] Hata:', err);
     res.status(err.status || 500).json({ error: err.message || 'Balance verisi alinamadi' });
+  }
+});
+
+/**
+ * GET /api/positions/binancefable/breakdown?since_days=30
+ * Direction (LONG/SHORT), Strategy (short_fade/pump_long),
+ * Listing (spot/alpha) kirilimlari
+ */
+app.get('/api/positions/binancefable/breakdown', requireDashKey, async (req, res) => {
+  try {
+    const { since_days = '30' } = req.query;
+    const { where, params } = buildWhereSinceDays(since_days);
+
+    const listingExpr = `
+      CASE
+        WHEN market LIKE '%alpha%' THEN 'alpha'
+        WHEN market LIKE '%spot%'  THEN 'spot'
+        ELSE COALESCE(market, 'unknown')
+      END
+    `;
+
+    const runBreakdown = async (groupExpr) => {
+      const [rows] = await pool.query(`
+        SELECT
+          ${groupExpr} AS bucket,
+          SUM(CASE WHEN (${PNL_EXPR}) > 0 THEN 1 ELSE 0 END) AS wins,
+          SUM(CASE WHEN (${PNL_EXPR}) < 0 THEN 1 ELSE 0 END) AS losses,
+          COUNT(*) AS total,
+          SUM(${PNL_EXPR}) AS pnl
+        FROM \`tradefable\`
+        WHERE ${where}
+        GROUP BY ${groupExpr}
+      `, params);
+      const out = {};
+      for (const r of rows) {
+        const wins = Number(r.wins || 0);
+        const losses = Number(r.losses || 0);
+        const total = Number(r.total || 0);
+        const pnl = Number(r.pnl || 0);
+        const winRate = total > 0 ? (wins / total) * 100 : 0;
+        out[r.bucket] = {
+          wins, losses, total,
+          pnl: Number(pnl.toFixed(8)),
+          winRate: Number(winRate.toFixed(2)),
+        };
+      }
+      return out;
+    };
+
+    const [byDirection, byStrategy, byListing] = await Promise.all([
+      runBreakdown('direction'),
+      runBreakdown('strategy'),
+      runBreakdown(listingExpr),
+    ]);
+
+    res.json({ byDirection, byStrategy, byListing });
+  } catch (err) {
+    console.error('[/api/positions/binancefable/breakdown] Hata:', err);
+    res.status(err.status || 500).json({ error: err.message || 'Breakdown alinamadi' });
   }
 });
 
