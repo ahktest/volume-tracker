@@ -21,6 +21,8 @@
     .v-A{background:#7c3aed33;color:#c4b5fd}.v-F{background:#2563eb33;color:#93c5fd}
     .v-S{background:#05966933;color:#6ee7b7}.v-U{background:#dc262633;color:#fca5a5}.v-B{background:#ea580c33;color:#fdba74}
     .sleep-tag{background:#05966933;color:#6ee7b7;font-size:11px;font-weight:700;border-radius:5px;padding:3px 9px}
+    .cmc{display:inline-block;font-size:11px;font-weight:700;border-radius:5px;padding:2px 8px;margin-left:4px;background:#3861fb22;color:#7f9cf5;text-decoration:none}
+    .cmc:hover{background:#3861fb44;color:#a5b4fc}
     .btn{padding:7px 13px;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600;background:#2563eb;color:#fff}
     .btn:hover{background:#1d4ed8}.btn:disabled{opacity:.5}
 
@@ -98,7 +100,8 @@ function render(d){
   const m=d.metrics;
   document.getElementById('title').innerHTML=symbol+(m.is_sleeping?' <span class="sleep-tag">UYUYOR</span>':'')+
     ` <span class="sub">${m.status||''} ${m.contract_type||''}</span>`;
-  document.getElementById('badges').innerHTML=venues(m)+(m.alpha_id?` <span class="muted" style="font-size:11px">alpha_id: ${m.alpha_id}</span>`:'');
+  const cmc=m.cmc_slug?` <a class="cmc" href="https://coinmarketcap.com/currencies/${m.cmc_slug}/" target="_blank" rel="noopener">CoinMarketCap ↗</a>`:'';
+  document.getElementById('badges').innerHTML=venues(m)+cmc+(m.alpha_id?` <span class="muted" style="font-size:11px">alpha_id: ${m.alpha_id}</span>`:'');
 
   const dist=N(m.dist_lo7);
   const kpi=[

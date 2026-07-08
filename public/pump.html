@@ -52,6 +52,8 @@
     tr:hover td{background:#0d1320}
     .sym{font-weight:600;color:#e5e7eb}
     .sym a{text-decoration:none}
+    .cmc{display:inline-block;font-size:9px;font-weight:700;border-radius:4px;padding:1px 4px;margin-left:4px;background:#3861fb22;color:#7f9cf5;text-decoration:none;vertical-align:middle}
+    .cmc:hover{background:#3861fb44;color:#a5b4fc}
     .pos{color:#34d399}.neg{color:#f87171}.muted{color:#6b7280}
     .vbadge{display:inline-block;font-size:10px;font-weight:700;border-radius:4px;padding:1px 5px;margin-right:3px}
     .v-A{background:#7c3aed33;color:#c4b5fd}.v-F{background:#2563eb33;color:#93c5fd}
@@ -96,9 +98,14 @@
   <div class="panel active" id="panel-pumps">
     <div class="filters">
       <label class="pill">min magnitude <input type="number" id="f_mag" value="9" step="1"></label>
+      <label class="pill">alpha aşaması
+        <select id="f_phase" style="width:auto">
+          <option value="">hepsi</option>
+          <option value="alpha">saf alpha (spot değil)</option>
+          <option value="spot">spot'a çıkmış</option>
+        </select></label>
       <label class="pill check"><input type="checkbox" id="f_upbit"> upbit</label>
       <label class="pill check"><input type="checkbox" id="f_bybit"> bybit</label>
-      <label class="pill check"><input type="checkbox" id="f_spot"> spot</label>
       <label class="pill check"><input type="checkbox" id="f_nonlisting"> day-1 hariç</label>
     </div>
     <div class="table-wrap"><table id="tbl-pumps"></table></div>
@@ -110,6 +117,12 @@
       <label class="pill">min konsol. gün <input type="number" id="s_cons" value="45" step="5"></label>
       <label class="pill">max dist_lo7 % <input type="number" id="s_dist" value="" placeholder="—"></label>
       <label class="pill">max mcap ($) <input type="number" id="s_mcap" value="" placeholder="—"></label>
+      <label class="pill">alpha aşaması
+        <select id="s_phase" style="width:auto">
+          <option value="">hepsi</option>
+          <option value="alpha">saf alpha (spot değil)</option>
+          <option value="spot">spot'a çıkmış</option>
+        </select></label>
     </div>
     <div class="table-wrap"><table id="tbl-sleep"></table></div>
   </div>
@@ -136,6 +149,9 @@ function fmtMcap(v){ v=N(v); if(v===null) return '—'; if(v>=1e9) return '$'+(v
 function fmtPrice(v){ v=N(v); if(v===null) return '—'; if(v>=1) return v.toFixed(4); if(v>=0.01) return v.toFixed(5); return v.toPrecision(4); }
 function venues(c){ let h=''; if(+c.is_alpha)h+='<span class="vbadge v-A">A</span>'; if(+c.is_fut)h+='<span class="vbadge v-F">F</span>'; if(+c.is_spot)h+='<span class="vbadge v-S">S</span>'; if(+c.is_upbit)h+='<span class="vbadge v-U">U</span>'; if(+c.is_bybit)h+='<span class="vbadge v-B">B</span>'; return h; }
 const symLink = s => `<a href="pump-coin.html?symbol=${s}" class="sym">${s}</a>`;
+const cmcLink = c => c && c.cmc_slug ? `<a class="cmc" href="https://coinmarketcap.com/currencies/${c.cmc_slug}/" target="_blank" rel="noopener" title="CoinMarketCap">CMC</a>` : '';
+// alpha aşaması: bir coin hem alpha hem spot olamaz (spot'a graduate olunca saf alpha değildir)
+function passPhase(c,val){ if(!val) return true; return val==='alpha' ? !+c.is_spot : !!+c.is_spot; }
 
 // ── data load ──
 async function loadCoins(){
@@ -198,16 +214,16 @@ function render(){ renderPumps(); renderSleep(); renderMove(); }
 function renderPumps(){
   const minMag=N(document.getElementById('f_mag').value)||0;
   let rows=COINS.filter(c=>+c.event_count>0 && (N(c.max_magnitude)||0)>=minMag);
+  rows=rows.filter(c=>passPhase(c,document.getElementById('f_phase').value));
   if(document.getElementById('f_upbit').checked) rows=rows.filter(c=>+c.is_upbit);
   if(document.getElementById('f_bybit').checked) rows=rows.filter(c=>+c.is_bybit);
-  if(document.getElementById('f_spot').checked)  rows=rows.filter(c=>+c.is_spot);
   if(document.getElementById('f_nonlisting').checked) rows=rows.filter(c=>+c.non_listing_pumps>0);
   rows=sortRows(rows,'max_magnitude','pumps');
   document.getElementById('cnt-pumps').textContent=rows.length;
   const cols=[['symbol','Coin','txt'],['venue','Venue','txt'],['event_count','#Pump'],['max_fut_mag','Fut ×'],['max_alpha_mag','Alpha ×'],['non_listing_pumps','Gerçek'],['listing_pumps','Day-1'],['mcap_usd','Mcap'],['fut_ath_age_days','ATH yaş(g)']];
   const t=document.getElementById('tbl-pumps');
   t.innerHTML = thead(cols,'pumps') + '<tbody>' + (rows.length?rows.map(c=>`<tr>
-    <td>${symLink(c.symbol)}</td>
+    <td>${symLink(c.symbol)}${cmcLink(c)}</td>
     <td class="txt">${venues(c)}</td>
     <td>${c.event_count}</td>
     <td>${c.max_fut_mag?fmtN(c.max_fut_mag,1)+'×':'—'}</td>
@@ -224,6 +240,7 @@ function renderSleep(){
   const maxDist=N(document.getElementById('s_dist').value);
   const maxMcap=N(document.getElementById('s_mcap').value);
   let rows=COINS.filter(c=>+c.is_sleeping && (N(c.consolidation_days)||0)>=minCons);
+  rows=rows.filter(c=>passPhase(c,document.getElementById('s_phase').value));
   if(maxDist!==null) rows=rows.filter(c=>{const d=c._distLive??N(c.dist_lo7); return d!==null&&d<=maxDist;});
   if(maxMcap!==null) rows=rows.filter(c=>N(c.mcap_usd)!==null&&N(c.mcap_usd)<=maxMcap);
   rows=sortRows(rows,'consolidation_days','sleep');
@@ -233,7 +250,7 @@ function renderSleep(){
   t.innerHTML=thead(cols,'sleep')+'<tbody>'+(rows.length?rows.map(c=>{
     const dist=c._distLive??N(c.dist_lo7);
     return `<tr>
-    <td>${symLink(c.symbol)}</td>
+    <td>${symLink(c.symbol)}${cmcLink(c)}</td>
     <td class="txt">${venues(c)}</td>
     <td><b>${c.consolidation_days??'—'}</b></td>
     <td>${fmtN(c.cons_range_pct,0)}%</td>
@@ -253,7 +270,7 @@ function renderMove(){
   const cols=[['symbol','Coin','txt'],['tetik','Tetik','txt'],['last','Fiyat'],['chgPct','24h %'],['dist_lo7','dist_lo7'],['quoteVol','24h hacim'],['funding','Funding']];
   t.innerHTML='<thead><tr>'+cols.map(c=>`<th class="${c[2]==='txt'?'txt':''}">${c[1]}</th>`).join('')+'</tr></thead><tbody>'+
     (rows.length?rows.map(b=>`<tr>
-      <td>${symLink(b.symbol)}</td>
+      <td>${symLink(b.symbol)}${cmcLink(COINS.find(c=>c.symbol===b.symbol))}</td>
       <td class="txt">
         ${b.band_break?'<span class="fire">BAND</span> ':''}
         ${b.vol_spike?'<span class="fire">HACİM</span> ':''}
@@ -284,8 +301,8 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   t.classList.add('active');
   document.getElementById('panel-'+t.dataset.tab).classList.add('active');
 });
-['f_mag','f_upbit','f_bybit','f_spot','f_nonlisting'].forEach(id=>document.getElementById(id).addEventListener('input',renderPumps));
-['s_cons','s_dist','s_mcap'].forEach(id=>document.getElementById(id).addEventListener('input',renderSleep));
+['f_mag','f_phase','f_upbit','f_bybit','f_nonlisting'].forEach(id=>document.getElementById(id).addEventListener('input',renderPumps));
+['s_cons','s_dist','s_mcap','s_phase'].forEach(id=>document.getElementById(id).addEventListener('input',renderSleep));
 document.getElementById('btnRefresh').onclick=startRefresh;
 document.getElementById('btnLive').onclick=loadLive;
 

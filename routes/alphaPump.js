@@ -38,7 +38,8 @@ module.exports = (pool) => {
           pe.max_magnitude,
           pe.max_fut_mag, pe.max_alpha_mag,
           COALESCE(pe.listing_pumps, 0)      AS listing_pumps,
-          COALESCE(pe.non_listing_pumps, 0)  AS non_listing_pumps
+          COALESCE(pe.non_listing_pumps, 0)  AS non_listing_pumps,
+          cmc.cmc_slug, cmc.cmc_id
         FROM coin_metrics cm
         LEFT JOIN (
           SELECT symbol,
@@ -50,6 +51,10 @@ module.exports = (pool) => {
             SUM(1 - is_listing_pump)                        AS non_listing_pumps
           FROM pump_events GROUP BY symbol
         ) pe ON pe.symbol = cm.symbol
+        LEFT JOIN (
+          SELECT base_asset, MAX(cmc_slug) AS cmc_slug, MAX(cmc_id) AS cmc_id
+          FROM binance_futures_tracking WHERE is_delist = 0 GROUP BY base_asset
+        ) cmc ON cmc.base_asset = cm.symbol
         ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
         ORDER BY ${sortCol} IS NULL, ${sortCol} ${dir}
       `, params);
@@ -136,7 +141,14 @@ module.exports = (pool) => {
   router.get('/coin/:symbol', async (req, res) => {
     try {
       const symbol = req.params.symbol.toUpperCase();
-      const [[metrics]] = await pool.query('SELECT * FROM coin_metrics WHERE symbol = ?', [symbol]);
+      const [[metrics]] = await pool.query(`
+        SELECT cm.*, cmc.cmc_slug, cmc.cmc_id, cmc.cmc_symbol
+        FROM coin_metrics cm
+        LEFT JOIN (
+          SELECT base_asset, MAX(cmc_slug) AS cmc_slug, MAX(cmc_id) AS cmc_id, MAX(cmc_symbol) AS cmc_symbol
+          FROM binance_futures_tracking WHERE is_delist = 0 GROUP BY base_asset
+        ) cmc ON cmc.base_asset = cm.symbol
+        WHERE cm.symbol = ?`, [symbol]);
       if (!metrics) return res.status(404).json({ error: 'not_found' });
       const [events] = await pool.query(
         'SELECT * FROM pump_events WHERE symbol = ? ORDER BY trough_date ASC', [symbol]);
