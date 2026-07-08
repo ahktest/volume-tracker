@@ -1160,6 +1160,11 @@ app.get('/api/signals/stats', requireDashKey, async (req, res) => {
 });
 
 
+// ────────────────────────────────────────────
+// ALPHA–FUTURES PUMP DASHBOARD (public)
+// ────────────────────────────────────────────
+app.use('/api/pump', require('./routes/alphaPump')(pool));
+
 // Sunucu baslatma
 app.listen(PORT, () => {
   console.log(`Sunucu calisiyor: http://localhost:${PORT}`);

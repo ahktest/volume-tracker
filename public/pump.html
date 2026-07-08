@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8"/>
+  <title>Alpha–Futures Pump Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <link rel="icon" href="favicon.png" type="image/x-icon"/>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Segoe UI',Tahoma,sans-serif;background:#0b0f14;color:#e5e7eb;min-height:100vh}
+    a{color:inherit}
+    .container{max-width:1400px;margin:0 auto;padding:20px 16px}
+    .header-bar{display:flex;align-items:center;justify-content:space-between;padding:16px 0;border-bottom:1px solid #1f2937;margin-bottom:16px;flex-wrap:wrap;gap:12px}
+    .header-bar h1{font-size:1.4rem;color:#93c5fd}
+    .header-bar .sub{color:#6b7280;font-size:13px;margin-top:2px}
+    .actions{display:flex;gap:8px;flex-wrap:wrap}
+    .btn{padding:8px 14px;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600}
+    .btn-primary{background:#2563eb;color:#fff}.btn-primary:hover{background:#1d4ed8}
+    .btn-ghost{background:#374151;color:#cbd5e1}.btn-ghost:hover{background:#4b5563}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+
+    /* progress */
+    .progress-wrap{margin:8px 0 16px;display:none}
+    .progress-wrap.show{display:block}
+    .progress-track{height:10px;background:#1f2937;border-radius:6px;overflow:hidden}
+    .progress-bar{height:100%;background:#2563eb;width:0;transition:width .3s}
+    .progress-txt{font-size:12px;color:#9ca3af;margin-top:6px}
+
+    /* tabs */
+    .tabs{display:flex;gap:4px;border-bottom:1px solid #1f2937;margin-bottom:16px;flex-wrap:wrap}
+    .tab{padding:10px 18px;color:#9ca3af;cursor:pointer;border-bottom:2px solid transparent;font-size:14px}
+    .tab:hover{color:#e5e7eb}
+    .tab.active{color:#93c5fd;border-bottom-color:#3b82f6;font-weight:600}
+    .tab .badge{background:#1f2937;color:#93c5fd;border-radius:10px;padding:1px 8px;font-size:11px;margin-left:6px}
+    .panel{display:none}.panel.active{display:block}
+
+    /* filters */
+    .filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+    .pill{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:#111827;border:1px solid #1f2937;border-radius:10px;font-size:12px;color:#9ca3af}
+    .pill input,.pill select{background:#1f2937;color:#e5e7eb;border:1px solid #374151;border-radius:6px;padding:5px 8px;font-size:12px;outline:none;width:90px}
+    .pill.check{cursor:pointer}
+    .pill.check input{width:auto}
+
+    /* table */
+    .table-wrap{overflow-x:auto;border:1px solid #1f2937;border-radius:10px}
+    table{width:100%;border-collapse:collapse;min-width:760px;font-size:13px}
+    thead th{background:#0f172a;color:#94a3b8;font-weight:600;padding:9px 11px;text-align:right;white-space:nowrap;position:sticky;top:0;cursor:pointer;user-select:none;border-bottom:1px solid #1f2937}
+    thead th:first-child,tbody td:first-child{text-align:left}
+    thead th.txt{text-align:left}
+    tbody td{padding:8px 11px;border-bottom:1px solid #1a2332;white-space:nowrap;text-align:right}
+    tbody td:first-child{text-align:left}
+    tr:hover td{background:#0d1320}
+    .sym{font-weight:600;color:#e5e7eb}
+    .sym a{text-decoration:none}
+    .pos{color:#34d399}.neg{color:#f87171}.muted{color:#6b7280}
+    .vbadge{display:inline-block;font-size:10px;font-weight:700;border-radius:4px;padding:1px 5px;margin-right:3px}
+    .v-A{background:#7c3aed33;color:#c4b5fd}.v-F{background:#2563eb33;color:#93c5fd}
+    .v-S{background:#05966933;color:#6ee7b7}.v-U{background:#dc262633;color:#fca5a5}.v-B{background:#ea580c33;color:#fdba74}
+    .tag{font-size:10px;font-weight:700;border-radius:4px;padding:1px 6px}
+    .tag-guclu{background:#dc262633;color:#fca5a5}.tag-yavas{background:#3b82f633;color:#93c5fd}
+    .tag-listing{background:#4b556333;color:#9ca3af}
+    .fire{background:#f59e0b22;color:#fbbf24;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700}
+    .empty{padding:40px;text-align:center;color:#6b7280}
+    .rowbtn{background:#1f2937;color:#93c5fd;border:1px solid #374151;border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer}
+    .rowbtn:hover{background:#374151}
+    .status-line{font-size:12px;color:#6b7280;margin-bottom:10px}
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="header-bar">
+    <div>
+      <h1>Alpha–Futures Pump Dashboard</h1>
+      <div class="sub">Kanıtlanmış-pumpable → uyuyan (coil) → hareket başladı</div>
+    </div>
+    <div class="actions">
+      <button class="btn btn-ghost"   id="btnLive">Fiyatları tazele</button>
+      <button class="btn btn-primary" id="btnRefresh">Tümünü güncelle</button>
+    </div>
+  </div>
+
+  <div class="progress-wrap" id="progWrap">
+    <div class="progress-track"><div class="progress-bar" id="progBar"></div></div>
+    <div class="progress-txt" id="progTxt"></div>
+  </div>
+
+  <div class="status-line" id="statusLine">Yükleniyor…</div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="pumps">Eski pumplar <span class="badge" id="cnt-pumps">0</span></div>
+    <div class="tab" data-tab="sleep">Uyuyan (watchlist) <span class="badge" id="cnt-sleep">0</span></div>
+    <div class="tab" data-tab="move">Hareket başladı <span class="badge" id="cnt-move">0</span></div>
+  </div>
+
+  <!-- A. Eski pumplar -->
+  <div class="panel active" id="panel-pumps">
+    <div class="filters">
+      <label class="pill">min magnitude <input type="number" id="f_mag" value="9" step="1"></label>
+      <label class="pill check"><input type="checkbox" id="f_upbit"> upbit</label>
+      <label class="pill check"><input type="checkbox" id="f_bybit"> bybit</label>
+      <label class="pill check"><input type="checkbox" id="f_spot"> spot</label>
+      <label class="pill check"><input type="checkbox" id="f_nonlisting"> day-1 hariç</label>
+    </div>
+    <div class="table-wrap"><table id="tbl-pumps"></table></div>
+  </div>
+
+  <!-- B. Uyuyan -->
+  <div class="panel" id="panel-sleep">
+    <div class="filters">
+      <label class="pill">min konsol. gün <input type="number" id="s_cons" value="45" step="5"></label>
+      <label class="pill">max dist_lo7 % <input type="number" id="s_dist" value="" placeholder="—"></label>
+      <label class="pill">max mcap ($) <input type="number" id="s_mcap" value="" placeholder="—"></label>
+    </div>
+    <div class="table-wrap"><table id="tbl-sleep"></table></div>
+  </div>
+
+  <!-- C. Hareket başladı -->
+  <div class="panel" id="panel-move">
+    <div class="status-line" id="moveHint">Uyuyan setten canlı breakout tetiği yananlar. "Fiyatları tazele" ile güncellenir.</div>
+    <div class="table-wrap"><table id="tbl-move"></table></div>
+  </div>
+</div>
+
+<script>
+const API = '/api/pump';
+let COINS = [];          // /coins
+let LIVE = { coins:{}, breakouts:[] };
+let sortState = { pumps:{col:'max_magnitude',dir:-1}, sleep:{col:'consolidation_days',dir:-1} };
+
+// ── helpers ──
+const N = v => (v===null||v===undefined||v==='') ? null : Number(v);
+const fmtN = (v,d=2) => v===null||!isFinite(v) ? '—' : Number(v).toLocaleString('en-US',{maximumFractionDigits:d});
+const fmtPct = v => v===null||!isFinite(v) ? '—' : (v>=0?'+':'')+Number(v).toFixed(1)+'%';
+const cls = v => v===null?'':(v>=0?'pos':'neg');
+function fmtMcap(v){ v=N(v); if(v===null) return '—'; if(v>=1e9) return '$'+(v/1e9).toFixed(2)+'B'; if(v>=1e6) return '$'+(v/1e6).toFixed(1)+'M'; if(v>=1e3) return '$'+(v/1e3).toFixed(0)+'K'; return '$'+v.toFixed(0); }
+function fmtPrice(v){ v=N(v); if(v===null) return '—'; if(v>=1) return v.toFixed(4); if(v>=0.01) return v.toFixed(5); return v.toPrecision(4); }
+function venues(c){ let h=''; if(+c.is_alpha)h+='<span class="vbadge v-A">A</span>'; if(+c.is_fut)h+='<span class="vbadge v-F">F</span>'; if(+c.is_spot)h+='<span class="vbadge v-S">S</span>'; if(+c.is_upbit)h+='<span class="vbadge v-U">U</span>'; if(+c.is_bybit)h+='<span class="vbadge v-B">B</span>'; return h; }
+const symLink = s => `<a href="pump-coin.html?symbol=${s}" class="sym">${s}</a>`;
+
+// ── data load ──
+async function loadCoins(){
+  document.getElementById('statusLine').textContent = 'Coinler yükleniyor…';
+  const r = await fetch(`${API}/coins?sort=consolidation_days&dir=desc`);
+  COINS = await r.json();
+  render();
+  document.getElementById('statusLine').textContent =
+    `${COINS.length} coin • uyuyan: ${COINS.filter(c=>+c.is_sleeping).length} • pumplı: ${COINS.filter(c=>+c.event_count>0).length}`;
+}
+async function loadLive(){
+  const btn = document.getElementById('btnLive'); btn.disabled = true; btn.textContent='Tazeleniyor…';
+  try{
+    const r = await fetch(`${API}/live`); LIVE = await r.json();
+    // merge live price/dist into COINS
+    for(const c of COINS){ const lv = LIVE.coins[c.symbol]; if(lv){ c._live = lv; if(lv.last && N(c.low_7d)>0) c._distLive=(lv.last/N(c.low_7d)-1)*100; } }
+    render();
+  }catch(e){ alert('Live hata: '+e.message); }
+  btn.disabled=false; btn.textContent='Fiyatları tazele';
+}
+
+// ── refresh job ──
+async function startRefresh(){
+  const btn=document.getElementById('btnRefresh'); btn.disabled=true;
+  const r=await fetch(`${API}/refresh`,{method:'POST'}); const j=await r.json();
+  if(!j.started){ alert('Zaten çalışıyor'); pollStatus(); return; }
+  document.getElementById('progWrap').classList.add('show');
+  pollStatus();
+}
+async function pollStatus(){
+  const r=await fetch(`${API}/refresh/status`); const s=await r.json();
+  const pct = s.total ? Math.round(s.done/s.total*100) : 0;
+  document.getElementById('progBar').style.width = pct+'%';
+  document.getElementById('progTxt').textContent =
+    `${s.done}/${s.total} • ok:${s.ok} hata:${s.failed}` + (s.current?` • ${s.current}`:'') + (s.running?'':' • ✓ bitti');
+  if(s.running){ setTimeout(pollStatus,1500); }
+  else{ document.getElementById('btnRefresh').disabled=false; await loadCoins(); setTimeout(()=>document.getElementById('progWrap').classList.remove('show'),4000); }
+}
+async function refreshOne(sym,btn){
+  btn.disabled=true; btn.textContent='…';
+  try{ await fetch(`${API}/refresh/${sym}`,{method:'POST'}); await loadCoins(); }
+  catch(e){ alert(e.message); btn.disabled=false; btn.textContent='↻'; }
+}
+
+// ── sorting ──
+function sortRows(rows,key,tab){
+  const st=sortState[tab];
+  return [...rows].sort((a,b)=>{
+    let x=a[st.col], y=b[st.col];
+    if(st.col==='symbol'){ return st.dir*String(x).localeCompare(String(y)); }
+    x=N(x); y=N(y); if(x===null)return 1; if(y===null)return -1;
+    return st.dir*(x-y);
+  });
+}
+function headerClick(tab,col){ const st=sortState[tab]; if(st.col===col)st.dir*=-1; else{st.col=col;st.dir=-1;} render(); }
+
+// ── renderers ──
+function render(){ renderPumps(); renderSleep(); renderMove(); }
+
+function renderPumps(){
+  const minMag=N(document.getElementById('f_mag').value)||0;
+  let rows=COINS.filter(c=>+c.event_count>0 && (N(c.max_magnitude)||0)>=minMag);
+  if(document.getElementById('f_upbit').checked) rows=rows.filter(c=>+c.is_upbit);
+  if(document.getElementById('f_bybit').checked) rows=rows.filter(c=>+c.is_bybit);
+  if(document.getElementById('f_spot').checked)  rows=rows.filter(c=>+c.is_spot);
+  if(document.getElementById('f_nonlisting').checked) rows=rows.filter(c=>+c.non_listing_pumps>0);
+  rows=sortRows(rows,'max_magnitude','pumps');
+  document.getElementById('cnt-pumps').textContent=rows.length;
+  const cols=[['symbol','Coin','txt'],['venue','Venue','txt'],['event_count','#Pump'],['max_fut_mag','Fut ×'],['max_alpha_mag','Alpha ×'],['non_listing_pumps','Gerçek'],['listing_pumps','Day-1'],['mcap_usd','Mcap'],['fut_ath_age_days','ATH yaş(g)']];
+  const t=document.getElementById('tbl-pumps');
+  t.innerHTML = thead(cols,'pumps') + '<tbody>' + (rows.length?rows.map(c=>`<tr>
+    <td>${symLink(c.symbol)}</td>
+    <td class="txt">${venues(c)}</td>
+    <td>${c.event_count}</td>
+    <td>${c.max_fut_mag?fmtN(c.max_fut_mag,1)+'×':'—'}</td>
+    <td>${c.max_alpha_mag?fmtN(c.max_alpha_mag,1)+'×':'—'}</td>
+    <td>${c.non_listing_pumps}</td>
+    <td class="muted">${c.listing_pumps}</td>
+    <td>${fmtMcap(c.mcap_usd)}</td>
+    <td class="muted">${c.fut_ath_age_days??'—'}</td>
+  </tr>`).join(''):emptyRow(cols.length)) + '</tbody>';
+}
+
+function renderSleep(){
+  const minCons=N(document.getElementById('s_cons').value)||0;
+  const maxDist=N(document.getElementById('s_dist').value);
+  const maxMcap=N(document.getElementById('s_mcap').value);
+  let rows=COINS.filter(c=>+c.is_sleeping && (N(c.consolidation_days)||0)>=minCons);
+  if(maxDist!==null) rows=rows.filter(c=>{const d=c._distLive??N(c.dist_lo7); return d!==null&&d<=maxDist;});
+  if(maxMcap!==null) rows=rows.filter(c=>N(c.mcap_usd)!==null&&N(c.mcap_usd)<=maxMcap);
+  rows=sortRows(rows,'consolidation_days','sleep');
+  document.getElementById('cnt-sleep').textContent=rows.length;
+  const cols=[['symbol','Coin','txt'],['venue','Venue','txt'],['consolidation_days','Konsol.(g)'],['cons_range_pct','Range %'],['dist_lo7','dist_lo7'],['ret7d','7g %'],['mcap_usd','Mcap'],['max_magnitude','En büyük ×'],['fut_ath_age_days','ATH yaş(g)'],['act','']];
+  const t=document.getElementById('tbl-sleep');
+  t.innerHTML=thead(cols,'sleep')+'<tbody>'+(rows.length?rows.map(c=>{
+    const dist=c._distLive??N(c.dist_lo7);
+    return `<tr>
+    <td>${symLink(c.symbol)}</td>
+    <td class="txt">${venues(c)}</td>
+    <td><b>${c.consolidation_days??'—'}</b></td>
+    <td>${fmtN(c.cons_range_pct,0)}%</td>
+    <td class="${cls(dist)}">${dist!==null?fmtN(dist,1)+'%':'—'}</td>
+    <td class="${cls(N(c.ret7d))}">${fmtPct(N(c.ret7d))}</td>
+    <td>${fmtMcap(c.mcap_usd)}</td>
+    <td>${c.max_magnitude?fmtN(c.max_magnitude,1)+'×':'—'}</td>
+    <td class="muted">${c.fut_ath_age_days??'—'}</td>
+    <td><button class="rowbtn" title="bu coini güncelle" onclick="refreshOne('${c.symbol}',this)">↻</button></td>
+  </tr>`;}).join(''):emptyRow(cols.length))+'</tbody>';
+}
+
+function renderMove(){
+  const rows=LIVE.breakouts||[];
+  document.getElementById('cnt-move').textContent=rows.length;
+  const t=document.getElementById('tbl-move');
+  const cols=[['symbol','Coin','txt'],['tetik','Tetik','txt'],['last','Fiyat'],['chgPct','24h %'],['dist_lo7','dist_lo7'],['quoteVol','24h hacim'],['funding','Funding']];
+  t.innerHTML='<thead><tr>'+cols.map(c=>`<th class="${c[2]==='txt'?'txt':''}">${c[1]}</th>`).join('')+'</tr></thead><tbody>'+
+    (rows.length?rows.map(b=>`<tr>
+      <td>${symLink(b.symbol)}</td>
+      <td class="txt">
+        ${b.band_break?'<span class="fire">BAND</span> ':''}
+        ${b.vol_spike?'<span class="fire">HACİM</span> ':''}
+        ${b.chg_break?'<span class="fire">%</span>':''}
+      </td>
+      <td>${fmtPrice(b.last)}</td>
+      <td class="${cls(b.chgPct)}">${fmtPct(b.chgPct)}</td>
+      <td class="${cls(b.dist_lo7)}">${b.dist_lo7!==null?fmtN(b.dist_lo7,1)+'%':'—'}</td>
+      <td>${fmtMcap(b.quoteVol)}</td>
+      <td class="${cls(b.funding)}">${b.funding!==null?(b.funding*100).toFixed(3)+'%':'—'}</td>
+    </tr>`).join(''):`<tr><td colspan="${cols.length}" class="empty">Şu an yanan yok. "Fiyatları tazele" ile kontrol et.</td></tr>`)+'</tbody>';
+}
+
+function thead(cols,tab){
+  const st=sortState[tab];
+  return '<thead><tr>'+cols.map(c=>{
+    if(c[0]==='venue'||c[0]==='act') return `<th class="${c[2]==='txt'?'txt':''}">${c[1]}</th>`;
+    const arrow = st.col===c[0] ? (st.dir<0?' ▼':' ▲') : '';
+    return `<th class="${c[2]==='txt'?'txt':''}" onclick="headerClick('${tab}','${c[0]}')">${c[1]}${arrow}</th>`;
+  }).join('')+'</tr></thead>';
+}
+const emptyRow=n=>`<tr><td colspan="${n}" class="empty">Kayıt yok</td></tr>`;
+
+// ── tabs & events ──
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  document.getElementById('panel-'+t.dataset.tab).classList.add('active');
+});
+['f_mag','f_upbit','f_bybit','f_spot','f_nonlisting'].forEach(id=>document.getElementById(id).addEventListener('input',renderPumps));
+['s_cons','s_dist','s_mcap'].forEach(id=>document.getElementById(id).addEventListener('input',renderSleep));
+document.getElementById('btnRefresh').onclick=startRefresh;
+document.getElementById('btnLive').onclick=loadLive;
+
+// ── init ──
+(async()=>{ await loadCoins(); pollStatus(); loadLive(); })();
+</script>
+</body>
+</html>

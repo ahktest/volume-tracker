@@ -1,0 +1,156 @@
+// Alpha–Futures Pump Dashboard endpoint'leri (handoff spec §9). Public.
+// server.js: app.use('/api/pump', require('./routes/alphaPump')(pool));
+const express = require('express');
+const binance = require('../lib/binance');
+const refresh = require('../lib/refresh');
+const cfg = require('../lib/config');
+
+module.exports = (pool) => {
+  const router = express.Router();
+
+  // ── GET /coins : coin_metrics + pump_events özet (filtreli) ──
+  router.get('/coins', async (req, res) => {
+    try {
+      const where = [];
+      const params = [];
+      const q = req.query;
+      if (q.sleeping === '1')      where.push('cm.is_sleeping = 1');
+      if (q.min_cons_days)         { where.push('cm.consolidation_days >= ?'); params.push(+q.min_cons_days); }
+      if (q.max_dist_lo7)          { where.push('cm.dist_lo7 <= ?'); params.push(+q.max_dist_lo7); }
+      if (q.min_mcap)              { where.push('cm.mcap_usd >= ?'); params.push(+q.min_mcap); }
+      if (q.max_mcap)              { where.push('cm.mcap_usd <= ?'); params.push(+q.max_mcap); }
+      for (const v of ['is_upbit', 'is_bybit', 'is_spot', 'is_verified']) {
+        if (q[v] === '1') where.push(`cm.${v} = 1`);
+      }
+      if (q.has_pump === '1')      where.push('pe.event_count > 0');
+      if (q.min_magnitude)         { where.push('pe.max_magnitude >= ?'); params.push(+q.min_magnitude); }
+
+      // sıralama (whitelist)
+      const SORTABLE = new Set(['consolidation_days','dist_lo7','mcap_usd','ret7d','ret30d',
+                                'fut_ath_age_days','max_magnitude','event_count','symbol','last_updated_at']);
+      const sort = SORTABLE.has(q.sort) ? q.sort : 'consolidation_days';
+      const sortCol = ['max_magnitude','event_count'].includes(sort) ? `pe.${sort}` : `cm.${sort}`;
+      const dir = (q.dir || 'desc').toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+
+      const [rows] = await pool.query(`
+        SELECT cm.*,
+          COALESCE(pe.event_count, 0)        AS event_count,
+          pe.max_magnitude,
+          pe.max_fut_mag, pe.max_alpha_mag,
+          COALESCE(pe.listing_pumps, 0)      AS listing_pumps,
+          COALESCE(pe.non_listing_pumps, 0)  AS non_listing_pumps
+        FROM coin_metrics cm
+        LEFT JOIN (
+          SELECT symbol,
+            COUNT(*)                                        AS event_count,
+            MAX(magnitude_x)                                AS max_magnitude,
+            MAX(CASE WHEN market='futures' THEN magnitude_x END) AS max_fut_mag,
+            MAX(CASE WHEN market='alpha'   THEN magnitude_x END) AS max_alpha_mag,
+            SUM(is_listing_pump)                            AS listing_pumps,
+            SUM(1 - is_listing_pump)                        AS non_listing_pumps
+          FROM pump_events GROUP BY symbol
+        ) pe ON pe.symbol = cm.symbol
+        ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+        ORDER BY ${sortCol} IS NULL, ${sortCol} ${dir}
+      `, params);
+      res.json(rows);
+    } catch (err) {
+      console.error('[pump/coins] hata:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── GET /live : ucuz batch ticker + funding + breakout (uyuyan set) ──
+  router.get('/live', async (req, res) => {
+    try {
+      const [ticker, funding, sleepers] = await Promise.all([
+        binance.ticker24hAll(),
+        binance.fundingAll(),
+        pool.query(`SELECT symbol, cons_mid, vol_base, low_7d, is_sleeping
+                    FROM coin_metrics WHERE is_sleeping = 1`).then(r => r[0]),
+      ]);
+
+      // Tüm coinler için canlı map (frontend merge eder)
+      const [allSyms] = await pool.query('SELECT symbol FROM coin_metrics');
+      const coins = {};
+      for (const { symbol } of allSyms) {
+        const t = ticker.get(`${symbol}USDT`);
+        coins[symbol] = t
+          ? { last: t.last, chgPct: t.chgPct, quoteVol: t.quoteVol, funding: funding.get(`${symbol}USDT`) ?? null }
+          : { last: null, chgPct: null, quoteVol: null, funding: null };
+      }
+
+      // Breakout tetiği yalnızca uyuyan set
+      const breakouts = [];
+      for (const s of sleepers) {
+        const t = ticker.get(`${s.symbol}USDT`);
+        if (!t) continue;
+        const consMid = s.cons_mid != null ? Number(s.cons_mid) : null;
+        const volBase = s.vol_base != null ? Number(s.vol_base) : null;
+        const low7    = s.low_7d != null ? Number(s.low_7d) : null;
+        const bandBreak = consMid != null && t.last > consMid * (1 + cfg.CONS_BAND);
+        const volSpike  = volBase != null && volBase > 0 && t.quoteVol > volBase * cfg.BREAKOUT_VOL_MULT;
+        const chgBreak  = t.chgPct >= cfg.BREAKOUT_CHG_PCT;
+        if (bandBreak || volSpike || chgBreak) {
+          breakouts.push({
+            symbol: s.symbol, last: t.last, chgPct: t.chgPct, quoteVol: t.quoteVol,
+            funding: funding.get(`${s.symbol}USDT`) ?? null,
+            dist_lo7: low7 && low7 > 0 ? (t.last / low7 - 1) * 100 : null,
+            band_break: bandBreak, vol_spike: volSpike, chg_break: chgBreak,
+          });
+        }
+      }
+      breakouts.sort((a, b) => (b.chgPct || 0) - (a.chgPct || 0));
+      res.json({ updatedAt: new Date(), coins, breakouts });
+    } catch (err) {
+      console.error('[pump/live] hata:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── POST /refresh : 258 coin STORE taraması (async job) ──
+  router.post('/refresh', async (req, res) => {
+    try {
+      const r = await refresh.startAll(pool);
+      res.json(r);
+    } catch (err) {
+      console.error('[pump/refresh] hata:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── GET /refresh/status : progress bar ──
+  router.get('/refresh/status', (req, res) => res.json(refresh.status()));
+
+  // ── POST /refresh/:symbol : tek coin yeniden hesapla ──
+  router.post('/refresh/:symbol', async (req, res) => {
+    try {
+      const result = await refresh.refreshOne(pool, req.params.symbol.toUpperCase());
+      res.json(result);
+    } catch (err) {
+      res.status(err.status || 500).json({ error: err.message });
+    }
+  });
+
+  // ── GET /coin/:symbol : detay (metrics + events + klines) ──
+  router.get('/coin/:symbol', async (req, res) => {
+    try {
+      const symbol = req.params.symbol.toUpperCase();
+      const [[metrics]] = await pool.query('SELECT * FROM coin_metrics WHERE symbol = ?', [symbol]);
+      if (!metrics) return res.status(404).json({ error: 'not_found' });
+      const [events] = await pool.query(
+        'SELECT * FROM pump_events WHERE symbol = ? ORDER BY trough_date ASC', [symbol]);
+      let klines = [];
+      try {
+        const raw = await binance.futuresKlines(symbol, cfg.KLINE_INTERVAL, 365);
+        klines = raw.map(k => ({ t: k[0], o: +k[1], h: +k[2], l: +k[3], c: +k[4] }));
+      } catch (e) { /* grafik yoksa boş */ }
+      res.json({ metrics, events, klines });
+    } catch (err) {
+      console.error('[pump/coin] hata:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  return router;
+};
