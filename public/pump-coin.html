@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8"/>
+  <title>Pump Coin Detay</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <link rel="icon" href="favicon.png" type="image/x-icon"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Segoe UI',Tahoma,sans-serif;background:#0b0f14;color:#e5e7eb;min-height:100vh}
+    a{color:#93c5fd;text-decoration:none}
+    .container{max-width:1100px;margin:0 auto;padding:20px 16px}
+    .back{font-size:13px;color:#6b7280}
+    .back:hover{color:#93c5fd}
+    .header-bar{display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid #1f2937;margin-bottom:18px;flex-wrap:wrap;gap:12px}
+    .header-bar h1{font-size:1.5rem;color:#e5e7eb}
+    .header-bar h1 .sub{font-size:.9rem;color:#6b7280;font-weight:400;margin-left:8px}
+    .badges{margin-top:6px}
+    .vbadge{display:inline-block;font-size:10px;font-weight:700;border-radius:4px;padding:2px 6px;margin-right:3px}
+    .v-A{background:#7c3aed33;color:#c4b5fd}.v-F{background:#2563eb33;color:#93c5fd}
+    .v-S{background:#05966933;color:#6ee7b7}.v-U{background:#dc262633;color:#fca5a5}.v-B{background:#ea580c33;color:#fdba74}
+    .sleep-tag{background:#05966933;color:#6ee7b7;font-size:11px;font-weight:700;border-radius:5px;padding:3px 9px}
+    .btn{padding:7px 13px;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600;background:#2563eb;color:#fff}
+    .btn:hover{background:#1d4ed8}.btn:disabled{opacity:.5}
+
+    .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px}
+    .kpi{background:#111827;border:1px solid #1f2937;border-radius:10px;padding:12px 14px}
+    .kpi .label{font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+    .kpi .value{font-size:1.15rem;font-weight:700}
+    .pos{color:#34d399}.neg{color:#f87171}.muted{color:#6b7280}
+
+    .card{background:#111827;border:1px solid #1f2937;border-radius:12px;padding:16px 18px;margin-bottom:16px}
+    .card h2{font-size:14px;color:#93c5fd;margin-bottom:12px}
+    .chart-wrap{height:360px}
+
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    thead th{background:#0f172a;color:#94a3b8;font-weight:600;padding:8px 10px;text-align:right;white-space:nowrap;border-bottom:1px solid #1f2937}
+    thead th:first-child{text-align:left}
+    tbody td{padding:8px 10px;border-bottom:1px solid #1a2332;text-align:right;white-space:nowrap}
+    tbody td:first-child{text-align:left}
+    .tag{font-size:10px;font-weight:700;border-radius:4px;padding:1px 6px}
+    .tag-guclu{background:#dc262633;color:#fca5a5}.tag-yavas{background:#3b82f633;color:#93c5fd}
+    .tag-listing{background:#4b556333;color:#9ca3af}
+    .tag-m-futures{background:#2563eb33;color:#93c5fd}.tag-m-alpha{background:#7c3aed33;color:#c4b5fd}
+    .empty{padding:30px;text-align:center;color:#6b7280}
+    #err{color:#f87171;padding:20px;text-align:center;display:none}
+  </style>
+</head>
+<body>
+<div class="container">
+  <a class="back" href="pump.html">← Dashboard</a>
+  <div class="header-bar">
+    <div>
+      <h1 id="title">…</h1>
+      <div class="badges" id="badges"></div>
+    </div>
+    <button class="btn" id="btnRefresh">↻ Bu coini güncelle</button>
+  </div>
+
+  <div id="err"></div>
+
+  <div class="kpi-row" id="kpis"></div>
+
+  <div class="card">
+    <h2>Fiyat (futures, son 365g) — konsolidasyon bandı</h2>
+    <div class="chart-wrap"><canvas id="chart"></canvas></div>
+  </div>
+
+  <div class="card">
+    <h2>Pump geçmişi (≥9×)</h2>
+    <table id="events"></table>
+  </div>
+</div>
+
+<script>
+const API='/api/pump';
+const symbol=(new URLSearchParams(location.search).get('symbol')||'').toUpperCase();
+let chart;
+
+const N=v=>(v===null||v===undefined||v==='')?null:Number(v);
+const fmtPct=v=>v===null||!isFinite(v)?'—':(v>=0?'+':'')+Number(v).toFixed(1)+'%';
+const cls=v=>v===null?'':(v>=0?'pos':'neg');
+function fmtMcap(v){v=N(v);if(v===null)return '—';if(v>=1e9)return '$'+(v/1e9).toFixed(2)+'B';if(v>=1e6)return '$'+(v/1e6).toFixed(1)+'M';if(v>=1e3)return '$'+(v/1e3).toFixed(0)+'K';return '$'+v.toFixed(0);}
+function fmtPrice(v){v=N(v);if(v===null)return '—';if(v>=1)return v.toFixed(4);if(v>=0.01)return v.toFixed(5);return v.toPrecision(4);}
+function venues(c){let h='';if(+c.is_alpha)h+='<span class="vbadge v-A">ALPHA</span>';if(+c.is_fut)h+='<span class="vbadge v-F">FUT</span>';if(+c.is_spot)h+='<span class="vbadge v-S">SPOT</span>';if(+c.is_upbit)h+='<span class="vbadge v-U">UPBIT</span>';if(+c.is_bybit)h+='<span class="vbadge v-B">BYBIT</span>';return h;}
+
+async function load(){
+  if(!symbol){ showErr('symbol parametresi yok'); return; }
+  document.getElementById('title').innerHTML=symbol+' <span class="sub">yükleniyor…</span>';
+  let d;
+  try{ const r=await fetch(`${API}/coin/${symbol}`); if(!r.ok){ showErr(r.status===404?'Bu coin coin_metrics\'te yok — önce "Tümünü güncelle" çalıştır.':'Hata '+r.status); return; } d=await r.json(); }
+  catch(e){ showErr(e.message); return; }
+  render(d);
+}
+
+function render(d){
+  const m=d.metrics;
+  document.getElementById('title').innerHTML=symbol+(m.is_sleeping?' <span class="sleep-tag">UYUYOR</span>':'')+
+    ` <span class="sub">${m.status||''} ${m.contract_type||''}</span>`;
+  document.getElementById('badges').innerHTML=venues(m)+(m.alpha_id?` <span class="muted" style="font-size:11px">alpha_id: ${m.alpha_id}</span>`:'');
+
+  const dist=N(m.dist_lo7);
+  const kpi=[
+    ['Son fiyat', fmtPrice(m.last_price)],
+    ['Konsolidasyon', (m.consolidation_days??'—')+' g', m.is_sleeping?'pos':''],
+    ['Konsol. range', m.cons_range_pct!=null?Number(m.cons_range_pct).toFixed(0)+'%':'—'],
+    ['dist_lo7', dist!=null?dist.toFixed(1)+'%':'—', cls(dist)],
+    ['ret7d', fmtPct(N(m.ret7d)), cls(N(m.ret7d))],
+    ['ret30d', fmtPct(N(m.ret30d)), cls(N(m.ret30d))],
+    ['Fut ATH', fmtPrice(m.fut_ath_price)+(m.fut_ath_age_days!=null?` (${m.fut_ath_age_days}g)`:'')],
+    ['Alpha ATH', fmtPrice(m.alpha_ath_price)+(m.alpha_ath_age_days!=null?` (${m.alpha_ath_age_days}g)`:'')],
+    ['Mcap', fmtMcap(m.mcap_usd)],
+    ['Fut geçmiş', (m.fut_history_days??'—')+' g'],
+  ];
+  document.getElementById('kpis').innerHTML=kpi.map(k=>`<div class="kpi"><div class="label">${k[0]}</div><div class="value ${k[2]||''}">${k[1]}</div></div>`).join('');
+
+  renderChart(d.klines,m);
+  renderEvents(d.events);
+}
+
+function renderChart(klines,m){
+  if(!klines||!klines.length){ document.getElementById('chart').parentElement.innerHTML='<div class="empty">Grafik verisi yok</div>'; return; }
+  const labels=klines.map(k=>new Date(k.t).toISOString().slice(0,10));
+  const close=klines.map(k=>k.c);
+  const ds=[{label:'Close',data:close,borderColor:'#60a5fa',backgroundColor:'#60a5fa22',borderWidth:1.5,pointRadius:0,fill:true,tension:.15}];
+  const mid=N(m.cons_mid);
+  if(mid!=null){
+    const band=0.30;
+    ds.push({label:'Konsol. mid',data:labels.map(()=>mid),borderColor:'#6b7280',borderWidth:1,borderDash:[5,4],pointRadius:0});
+    ds.push({label:'Üst band',data:labels.map(()=>mid*(1+band)),borderColor:'#34d39988',borderWidth:1,borderDash:[3,3],pointRadius:0});
+    ds.push({label:'Alt band',data:labels.map(()=>mid*(1-band)),borderColor:'#f8717188',borderWidth:1,borderDash:[3,3],pointRadius:0});
+  }
+  if(chart)chart.destroy();
+  chart=new Chart(document.getElementById('chart'),{type:'line',data:{labels,datasets:ds},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{intersect:false,mode:'index'},
+      plugins:{legend:{labels:{color:'#9ca3af',boxWidth:12,font:{size:11}}}},
+      scales:{x:{ticks:{color:'#6b7280',maxTicksLimit:8},grid:{color:'#1a2332'}},
+              y:{ticks:{color:'#6b7280'},grid:{color:'#1a2332'}}}}});
+}
+
+function renderEvents(events){
+  const t=document.getElementById('events');
+  const head='<thead><tr><th>Market</th><th>Dip tarihi</th><th>Dip</th><th>Tepe tarihi</th><th>Tepe</th><th>Magnitude</th><th>Süre</th><th>Hız</th><th>Tip</th></tr></thead>';
+  if(!events||!events.length){ t.innerHTML=head+`<tbody><tr><td colspan="9" class="empty">≥9× pump kaydı yok</td></tr></tbody>`; return; }
+  t.innerHTML=head+'<tbody>'+events.map(e=>`<tr>
+    <td><span class="tag tag-m-${e.market}">${e.market==='futures'?'FUT':'ALPHA'}</span></td>
+    <td>${e.trough_date}</td>
+    <td>${fmtPrice(e.trough_price)}</td>
+    <td>${e.peak_date||'—'}</td>
+    <td>${fmtPrice(e.peak_price)}</td>
+    <td><b>${Number(e.magnitude_x).toFixed(1)}×</b></td>
+    <td>${e.duration_days!=null?e.duration_days+'g':'—'}</td>
+    <td><span class="tag ${e.speed_class==='GUCLU'?'tag-guclu':'tag-yavas'}">${e.speed_class||'—'}</span></td>
+    <td>${+e.is_listing_pump?'<span class="tag tag-listing">day-1</span>':'gerçek'}</td>
+  </tr>`).join('')+'</tbody>';
+}
+
+function showErr(msg){ const e=document.getElementById('err'); e.textContent=msg; e.style.display='block'; document.getElementById('title').innerHTML=symbol||'—'; }
+
+document.getElementById('btnRefresh').onclick=async function(){
+  this.disabled=true; this.textContent='…';
+  try{ await fetch(`${API}/refresh/${symbol}`,{method:'POST'}); await load(); }
+  catch(e){ alert(e.message); }
+  this.disabled=false; this.textContent='↻ Bu coini güncelle';
+};
+
+load();
+</script>
+</body>
+</html>
