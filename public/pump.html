@@ -18,6 +18,9 @@
     .btn-primary{background:#2563eb;color:#fff}.btn-primary:hover{background:#1d4ed8}
     .btn-ghost{background:#374151;color:#cbd5e1}.btn-ghost:hover{background:#4b5563}
     .btn:disabled{opacity:.5;cursor:not-allowed}
+    /* admin-only kontroller: varsayılan gizli, sadece body.admin'de görünür */
+    .admin-only{display:none}
+    body.admin .admin-only{display:inline-block}
 
     /* progress */
     .progress-wrap{margin:8px 0 16px;display:none}
@@ -88,7 +91,7 @@
     </div>
     <div class="actions">
       <button class="btn btn-ghost"   id="btnLive">Fiyatları tazele</button>
-      <button class="btn btn-primary" id="btnRefresh">Tümünü güncelle</button>
+      <button class="btn btn-primary admin-only" id="btnRefresh">Tümünü güncelle</button>
     </div>
   </div>
 
@@ -159,6 +162,14 @@
 
 <script>
 const API = '/api/pump';
+// ── Admin modu (güncelle butonlarını gizle) ──
+// Aç: pump.html?admin=ahktest  (tarayıcı hatırlar) | Kapat: pump.html?admin=0
+const ADMIN_KEY = 'ahktest';
+const ADMIN = (()=>{ const p=new URLSearchParams(location.search).get('admin');
+  if(p===ADMIN_KEY) localStorage.setItem('pumpAdmin','1');
+  if(p==='0') localStorage.removeItem('pumpAdmin');
+  return localStorage.getItem('pumpAdmin')==='1'; })();
+if(ADMIN) document.body.classList.add('admin');
 let COINS = [];          // /coins
 let LIVE = { coins:{}, breakouts:[] };
 let sortState = { pumps:{col:'max_magnitude',dir:-1}, sleep:{col:'consolidation_days',dir:-1}, all:{col:'mcap_usd',dir:-1} };
@@ -374,7 +385,7 @@ function renderSleep(){
     <td>${fmtMcap(c.mcap_usd)}</td>
     <td>${c.max_magnitude?fmtN(c.max_magnitude,1)+'×':'—'}</td>
     <td class="muted">${c.fut_ath_age_days??'—'}</td>
-    <td><button class="rowbtn" title="bu coini güncelle" onclick="refreshOne('${c.symbol}',this)">↻</button></td>
+    <td>${ADMIN?`<button class="rowbtn" title="bu coini güncelle" onclick="refreshOne('${c.symbol}',this)">↻</button>`:''}</td>
   </tr>`;}).join(''):emptyRow(cols.length))+'</tbody>';
 }
 
@@ -423,7 +434,7 @@ document.getElementById('btnRefresh').onclick=startRefresh;
 document.getElementById('btnLive').onclick=loadLive;
 
 // ── init ──
-(async()=>{ await loadCoins(); pollStatus(); loadLive(); })();
+(async()=>{ await loadCoins(); if(ADMIN) pollStatus(); loadLive(); })();
 </script>
 </body>
 </html>

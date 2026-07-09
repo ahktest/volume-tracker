@@ -25,6 +25,7 @@
     .cmc:hover{background:#3861fb44;color:#a5b4fc}
     .btn{padding:7px 13px;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600;background:#2563eb;color:#fff}
     .btn:hover{background:#1d4ed8}.btn:disabled{opacity:.5}
+    .admin-only{display:none}body.admin .admin-only{display:inline-block}
 
     .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px}
     .kpi{background:#111827;border:1px solid #1f2937;border-radius:10px;padding:12px 14px}
@@ -57,7 +58,7 @@
       <h1 id="title">…</h1>
       <div class="badges" id="badges"></div>
     </div>
-    <button class="btn" id="btnRefresh">↻ Bu coini güncelle</button>
+    <button class="btn admin-only" id="btnRefresh">↻ Bu coini güncelle</button>
   </div>
 
   <div id="err"></div>
@@ -86,6 +87,8 @@
 const API='/api/pump';
 const symbol=(new URLSearchParams(location.search).get('symbol')||'').toUpperCase();
 let chart;
+// admin modu (güncelle butonu gizle) — pump.html?admin=ahktest ile açılır, aynı localStorage
+if(localStorage.getItem('pumpAdmin')==='1') document.body.classList.add('admin');
 
 const N=v=>(v===null||v===undefined||v==='')?null:Number(v);
 const fmtPct=v=>v===null||!isFinite(v)?'—':(v>=0?'+':'')+Number(v).toFixed(1)+'%';
