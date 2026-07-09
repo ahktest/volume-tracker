@@ -39,16 +39,22 @@ module.exports = (pool) => {
           pe.max_fut_mag, pe.max_alpha_mag,
           COALESCE(pe.listing_pumps, 0)      AS listing_pumps,
           COALESCE(pe.non_listing_pumps, 0)  AS non_listing_pumps,
+          pe.min_magnitude, pe.sum_magnitude,
+          pe.first_pump_date, pe.last_pump_date,
           cmc.cmc_slug, cmc.cmc_id
         FROM coin_metrics cm
         LEFT JOIN (
           SELECT symbol,
             COUNT(*)                                        AS event_count,
             MAX(magnitude_x)                                AS max_magnitude,
+            MIN(magnitude_x)                                AS min_magnitude,
+            SUM(magnitude_x)                                AS sum_magnitude,
             MAX(CASE WHEN market='futures' THEN magnitude_x END) AS max_fut_mag,
             MAX(CASE WHEN market='alpha'   THEN magnitude_x END) AS max_alpha_mag,
             SUM(is_listing_pump)                            AS listing_pumps,
-            SUM(1 - is_listing_pump)                        AS non_listing_pumps
+            SUM(1 - is_listing_pump)                        AS non_listing_pumps,
+            MIN(trough_date)                                AS first_pump_date,
+            MAX(peak_date)                                  AS last_pump_date
           FROM pump_events GROUP BY symbol
         ) pe ON pe.symbol = cm.symbol
         LEFT JOIN (

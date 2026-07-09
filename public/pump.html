@@ -66,6 +66,15 @@
     .rowbtn{background:#1f2937;color:#93c5fd;border:1px solid #374151;border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer}
     .rowbtn:hover{background:#374151}
     .status-line{font-size:12px;color:#6b7280;margin-bottom:10px}
+
+    /* KPI (eski pumplar istatistik kutuları) */
+    .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-bottom:16px}
+    .kpi{background:#111827;border:1px solid #1f2937;border-radius:10px;padding:12px 15px}
+    .kpi .label{font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px}
+    .kpi .value{font-size:1.5rem;font-weight:700;color:#e5e7eb}
+    .kpi .sub{font-size:12px;color:#9ca3af;margin-top:5px}
+    .kpi .combo{display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:2px 0;color:#cbd5e1}
+    .kpi .combo b{color:#93c5fd}
   </style>
 </head>
 <body>
@@ -97,6 +106,7 @@
 
   <!-- A. Eski pumplar -->
   <div class="panel active" id="panel-pumps">
+    <div class="kpi-row" id="pumpStats"></div>
     <div class="filters">
       <label class="pill">min magnitude <input type="number" id="f_mag" value="9" step="1"></label>
       <label class="pill">alpha aşaması
@@ -163,6 +173,9 @@ const symLink = s => `<a href="pump-coin.html?symbol=${s}" class="sym">${s}</a>`
 const cmcLink = c => c && c.cmc_slug ? `<a class="cmc" href="https://coinmarketcap.com/currencies/${c.cmc_slug}/" target="_blank" rel="noopener" title="CoinMarketCap">CMC</a>` : '';
 // alpha aşaması: bir coin hem alpha hem spot olamaz (spot'a graduate olunca saf alpha değildir)
 function passPhase(c,val){ if(!val) return true; return val==='alpha' ? !+c.is_spot : !!+c.is_spot; }
+const fmtDate = d => d ? String(d).slice(0,10) : '—';
+// borsa kombinasyon anahtarı (spot varsa alpha sayılmaz)
+function comboKey(c){ const p=[]; if(+c.is_alpha&&!+c.is_spot)p.push('ALPHA'); if(+c.is_fut)p.push('FUT'); if(+c.is_spot)p.push('SPOT'); if(+c.is_upbit)p.push('UPBIT'); if(+c.is_bybit)p.push('BYBIT'); return p.join(' + ')||'—'; }
 
 // ── data load ──
 async function loadCoins(){
@@ -247,6 +260,40 @@ function renderAll(){
   </tr>`;}).join(''):emptyRow(cols.length))+'</tbody>';
 }
 
+function renderPumpStats(rows){
+  const el=document.getElementById('pumpStats');
+  if(!rows.length){ el.innerHTML='<div class="kpi"><div class="label">İstatistik</div><div class="sub">Filtreye uyan pump yok.</div></div>'; return; }
+  let totEvents=0,sumMag=0,maxMag=-Infinity,minMag=Infinity,firstD=null,lastD=null;
+  const combo={};
+  for(const c of rows){
+    const ec=+c.event_count||0; totEvents+=ec;
+    if(c.sum_magnitude!=null) sumMag+=N(c.sum_magnitude);
+    if(c.max_magnitude!=null) maxMag=Math.max(maxMag,N(c.max_magnitude));
+    if(c.min_magnitude!=null) minMag=Math.min(minMag,N(c.min_magnitude));
+    const fd=fmtDate(c.first_pump_date), ld=fmtDate(c.last_pump_date);
+    if(fd!=='—'&&(!firstD||fd<firstD)) firstD=fd;
+    if(ld!=='—'&&(!lastD||ld>lastD)) lastD=ld;
+    const k=comboKey(c); combo[k]=(combo[k]||0)+ec;
+  }
+  const avg=totEvents?sumMag/totEvents:null;
+  const top=Object.entries(combo).sort((a,b)=>b[1]-a[1]).slice(0,3);
+  el.innerHTML=`
+    <div class="kpi">
+      <div class="label">En çok pump — kombinasyon</div>
+      ${top.map(([k,v])=>`<div class="combo"><span>${k}</span><b>${v}</b></div>`).join('')}
+    </div>
+    <div class="kpi">
+      <div class="label">Ortalama pump oranı</div>
+      <div class="value">${avg!=null?avg.toFixed(1)+'×':'—'}</div>
+      <div class="sub">${rows.length} coin • ${totEvents} pump</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Pump aralığı</div>
+      <div class="value">${isFinite(maxMag)?maxMag.toFixed(1)+'×':'—'} <span style="color:#6b7280;font-size:.95rem">/ ${isFinite(minMag)?minMag.toFixed(1)+'×':'—'}</span></div>
+      <div class="sub">en büyük / en küçük • ${firstD||'—'} → ${lastD||'—'}</div>
+    </div>`;
+}
+
 function renderPumps(){
   const minMag=N(document.getElementById('f_mag').value)||0;
   let rows=COINS.filter(c=>+c.event_count>0 && (N(c.max_magnitude)||0)>=minMag);
@@ -256,6 +303,7 @@ function renderPumps(){
   if(document.getElementById('f_nonlisting').checked) rows=rows.filter(c=>+c.non_listing_pumps>0);
   rows=sortRows(rows,'max_magnitude','pumps');
   document.getElementById('cnt-pumps').textContent=rows.length;
+  renderPumpStats(rows);
   const cols=[['symbol','Coin','txt'],['venue','Venue','txt'],['event_count','#Pump'],['max_fut_mag','Fut ×'],['max_alpha_mag','Alpha ×'],['non_listing_pumps','Gerçek'],['listing_pumps','Day-1'],['mcap_usd','Mcap'],['fut_ath_age_days','ATH yaş(g)']];
   const t=document.getElementById('tbl-pumps');
   t.innerHTML = thead(cols,'pumps') + '<tbody>' + (rows.length?rows.map(c=>`<tr>
