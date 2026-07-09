@@ -65,8 +65,15 @@
   <div class="kpi-row" id="kpis"></div>
 
   <div class="card">
-    <h2>Fiyat (futures, son 365g) — konsolidasyon bandı</h2>
+    <h2 id="chartTitle">Fiyat (son 365g) — konsolidasyon bandı</h2>
     <div class="chart-wrap"><canvas id="chart"></canvas></div>
+  </div>
+
+  <div class="card" id="llCard" style="display:none">
+    <h2>Futures ↔ Alpha ilişkisi (lead-lag)</h2>
+    <div id="llVerdict" style="margin-bottom:12px"></div>
+    <div class="kpi-row" id="llStats"></div>
+    <div class="muted" style="margin-top:10px;font-size:11px">Günlük kapanışlardan hesaplanır; aynı varlığın iki borsası olduğundan sinyaller yakındır — heuristik.</div>
   </div>
 
   <div class="card">
@@ -118,21 +125,30 @@ function render(d){
   ];
   document.getElementById('kpis').innerHTML=kpi.map(k=>`<div class="kpi"><div class="label">${k[0]}</div><div class="value ${k[2]||''}">${k[1]}</div></div>`).join('');
 
-  renderChart(d.klines,m);
+  renderChart(d,m);
+  renderLeadLag(d);
   renderEvents(d.events);
 }
 
-function renderChart(klines,m){
-  if(!klines||!klines.length){ document.getElementById('chart').parentElement.innerHTML='<div class="empty">Grafik verisi yok</div>'; return; }
-  const labels=klines.map(k=>new Date(k.t).toISOString().slice(0,10));
-  const close=klines.map(k=>k.c);
-  const ds=[{label:'Close',data:close,borderColor:'#60a5fa',backgroundColor:'#60a5fa22',borderWidth:1.5,pointRadius:0,fill:true,tension:.15}];
+const dayStr=t=>new Date(t).toISOString().slice(0,10);
+
+function renderChart(d,m){
+  const klines=d.klines||[], alpha=d.alphaKlines||[];
+  if(!klines.length){ document.getElementById('chart').parentElement.innerHTML='<div class="empty">Grafik verisi yok</div>'; return; }
+  const fm=new Map(klines.map(k=>[dayStr(k.t),k.c]));
+  const am=new Map(alpha.map(k=>[dayStr(k.t),k.c]));
+  const labels=[...new Set([...fm.keys(),...am.keys()])].sort();
+  document.getElementById('chartTitle').textContent = alpha.length
+    ? 'Futures vs Alpha (son 365g) — konsolidasyon bandı'
+    : 'Fiyat (futures, son 365g) — konsolidasyon bandı';
+  const ds=[{label:'Futures',data:labels.map(l=>fm.has(l)?fm.get(l):null),borderColor:'#4ade80',backgroundColor:'#4ade8018',borderWidth:1.6,pointRadius:0,fill:false,tension:.15,spanGaps:true}];
+  if(alpha.length) ds.push({label:'Alpha',data:labels.map(l=>am.has(l)?am.get(l):null),borderColor:'#d946ef',backgroundColor:'#d946ef18',borderWidth:1.6,pointRadius:0,fill:false,tension:.15,spanGaps:true});
   const mid=N(m.cons_mid);
   if(mid!=null){
     const band=0.30;
     ds.push({label:'Konsol. mid',data:labels.map(()=>mid),borderColor:'#6b7280',borderWidth:1,borderDash:[5,4],pointRadius:0});
-    ds.push({label:'Üst band',data:labels.map(()=>mid*(1+band)),borderColor:'#34d39988',borderWidth:1,borderDash:[3,3],pointRadius:0});
-    ds.push({label:'Alt band',data:labels.map(()=>mid*(1-band)),borderColor:'#f8717188',borderWidth:1,borderDash:[3,3],pointRadius:0});
+    ds.push({label:'Üst band',data:labels.map(()=>mid*(1+band)),borderColor:'#9ca3af66',borderWidth:1,borderDash:[3,3],pointRadius:0});
+    ds.push({label:'Alt band',data:labels.map(()=>mid*(1-band)),borderColor:'#9ca3af66',borderWidth:1,borderDash:[3,3],pointRadius:0});
   }
   if(chart)chart.destroy();
   chart=new Chart(document.getElementById('chart'),{type:'line',data:{labels,datasets:ds},
@@ -140,6 +156,68 @@ function renderChart(klines,m){
       plugins:{legend:{labels:{color:'#9ca3af',boxWidth:12,font:{size:11}}}},
       scales:{x:{ticks:{color:'#6b7280',maxTicksLimit:8},grid:{color:'#1a2332'}},
               y:{ticks:{color:'#6b7280'},grid:{color:'#1a2332'}}}}});
+}
+
+// ── Lead-lag: futures ↔ alpha ilişkisi ──
+function pearson(x,y){
+  const n=x.length; if(n<3) return null;
+  let sx=0,sy=0; for(let i=0;i<n;i++){sx+=x[i];sy+=y[i];}
+  const mx=sx/n,my=sy/n; let cov=0,vx=0,vy=0;
+  for(let i=0;i<n;i++){const a=x[i]-mx,b=y[i]-my; cov+=a*b; vx+=a*a; vy+=b*b;}
+  return (vx>0&&vy>0)?cov/Math.sqrt(vx*vy):null;
+}
+function medianArr(a){ if(!a.length)return null; const s=[...a].sort((p,q)=>p-q); const m=s.length>>1; return s.length%2?s[m]:(s[m-1]+s[m])/2; }
+function laggedCorr(fr,ar,L){ // L>0 => futures öncü (fr[i] ~ ar[i+L])
+  const x=[],y=[]; for(let i=0;i<fr.length;i++){const j=i+L; if(j>=0&&j<ar.length){x.push(fr[i]);y.push(ar[j]);}}
+  return x.length>6?pearson(x,y):-2;
+}
+function analyzeLeadLag(fut,alpha){
+  const fm=new Map(fut.map(k=>[dayStr(k.t),k.c])), am=new Map(alpha.map(k=>[dayStr(k.t),k.c]));
+  const dates=[...fm.keys()].filter(d=>am.has(d)&&fm.get(d)>0&&am.get(d)>0).sort();
+  if(dates.length<15) return null;
+  const fr=[],ar=[];
+  for(let i=1;i<dates.length;i++){ fr.push(Math.log(fm.get(dates[i])/fm.get(dates[i-1]))); ar.push(Math.log(am.get(dates[i])/am.get(dates[i-1]))); }
+  const corr=pearson(fr,ar);
+  let fpk=dates[0],apk=dates[0];
+  for(const d of dates){ if(fm.get(d)>fm.get(fpk))fpk=d; if(am.get(d)>am.get(apk))apk=d; }
+  const peakGap=(new Date(apk)-new Date(fpk))/86400000; // >0 => futures önce zirve
+  const fpkT=new Date(fpk).getTime();
+  const near=dates.filter(d=>Math.abs(new Date(d)-fpkT)<=7*86400000);
+  const prem=medianArr(near.map(d=>fm.get(d)/am.get(d)-1)); // >0 => futures daha yüksek
+  let bestLag=0,bestC=(corr==null?-2:corr);
+  for(let L=-3;L<=3;L++){ if(L===0)continue; const c=laggedCorr(fr,ar,L); if(c>bestC){bestC=c;bestLag=L;} }
+  return {corr:corr??0, peakGap, prem:prem??0, bestLag, n:dates.length};
+}
+function llVerdict(r){
+  const together = r.corr>0.8 && Math.abs(r.peakGap)<=1 && Math.abs(r.prem)<0.02;
+  if(together) return {text:'Futures ve alpha birlikte, senkron ilerledi.', cls:'pos'};
+  let s=0;
+  if(r.peakGap>1)s++; else if(r.peakGap<-1)s--;
+  if(r.prem>0.02)s++; else if(r.prem<-0.02)s--;
+  if(r.bestLag>0)s++; else if(r.bestLag<0)s--;
+  if(s>0) return {text:'Önce futures yükseldi, alpha takip etti (futures öncü).', cls:''};
+  if(s<0) return {text:'Önce alpha yükseldi, futures takip etti (alpha öncü).', cls:''};
+  return {text:'Net bir öncü yok — karışık ilişki.', cls:'muted'};
+}
+function renderLeadLag(d){
+  const card=document.getElementById('llCard');
+  const fut=d.klines||[], alpha=d.alphaKlines||[];
+  const pumped=(d.events||[]).length>0;
+  if(!alpha.length || !pumped){ card.style.display='none'; return; }
+  const r=analyzeLeadLag(fut,alpha);
+  if(!r){ card.style.display='none'; return; }
+  card.style.display='';
+  const v=llVerdict(r);
+  document.getElementById('llVerdict').innerHTML=`<div class="value ${v.cls}" style="font-size:1.2rem;font-weight:700">${v.text}</div>`;
+  const peakTxt=Math.abs(r.peakGap)<1?'aynı gün':(r.peakGap>0?`futures ${Math.round(r.peakGap)}g önce`:`alpha ${Math.round(-r.peakGap)}g önce`);
+  const lagTxt=r.bestLag===0?'eşzamanlı':(r.bestLag>0?`futures ${r.bestLag}g öncü`:`alpha ${-r.bestLag}g öncü`);
+  const stats=[
+    ['Korelasyon (günlük)', r.corr.toFixed(2)],
+    ['Zirve zamanlaması', peakTxt],
+    ['Premium (zirve civ.)', (r.prem>=0?'+':'')+(r.prem*100).toFixed(1)+'% '+(r.prem>0?'futures':'alpha')],
+    ['Lead-lag (korelasyon)', lagTxt],
+  ];
+  document.getElementById('llStats').innerHTML=stats.map(k=>`<div class="kpi"><div class="label">${k[0]}</div><div class="value" style="font-size:1.05rem">${k[1]}</div></div>`).join('');
 }
 
 function renderEvents(events){

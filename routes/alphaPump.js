@@ -163,7 +163,15 @@ module.exports = (pool) => {
         const raw = await binance.futuresKlines(symbol, cfg.KLINE_INTERVAL, 365);
         klines = raw.map(k => ({ t: k[0], o: +k[1], h: +k[2], l: +k[3], c: +k[4] }));
       } catch (e) { /* grafik yoksa boş */ }
-      res.json({ metrics, events, klines });
+      // alpha serisi (futures ile aynı grafikte overlay + lead-lag analizi için)
+      let alphaKlines = [];
+      if (metrics.alpha_id) {
+        try {
+          const raw = await binance.alphaKlines(metrics.alpha_id, cfg.KLINE_INTERVAL, 365);
+          alphaKlines = raw.map(k => ({ t: +k[0], c: +k[4] }));
+        } catch (e) { /* alpha yoksa boş */ }
+      }
+      res.json({ metrics, events, klines, alphaKlines });
     } catch (err) {
       console.error('[pump/coin] hata:', err);
       res.status(500).json({ error: err.message });
