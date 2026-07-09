@@ -42,7 +42,7 @@
     tbody td{padding:8px 10px;border-bottom:1px solid #1a2332;text-align:right;white-space:nowrap}
     tbody td:first-child{text-align:left}
     .tag{font-size:10px;font-weight:700;border-radius:4px;padding:1px 6px}
-    .tag-guclu{background:#dc262633;color:#fca5a5}.tag-yavas{background:#3b82f633;color:#93c5fd}
+    .tag-guclu{background:#dc262633;color:#fca5a5}.tag-yavas{background:#3b82f633;color:#93c5fd}.tag-slow{background:#f59e0b33;color:#fbbf24}
     .tag-listing{background:#4b556333;color:#9ca3af}
     .tag-m-futures{background:#2563eb33;color:#93c5fd}.tag-m-alpha{background:#7c3aed33;color:#c4b5fd}
     .empty{padding:30px;text-align:center;color:#6b7280}
@@ -154,7 +154,7 @@ function renderEvents(events){
     <td>${fmtPrice(e.peak_price)}</td>
     <td><b>${Number(e.magnitude_x).toFixed(1)}×</b></td>
     <td>${e.duration_days!=null?e.duration_days+'g':'—'}</td>
-    <td><span class="tag ${e.speed_class==='GUCLU'?'tag-guclu':'tag-yavas'}">${e.speed_class||'—'}</span></td>
+    <td><span class="tag ${e.speed_class==='GUCLU'?'tag-guclu':e.speed_class==='YAVAS'?'tag-yavas':'tag-slow'}">${e.speed_class||'—'}</span></td>
     <td>${+e.is_listing_pump?'<span class="tag tag-listing">day-1</span>':'gerçek'}</td>
   </tr>`).join('')+'</tbody>';
 }
