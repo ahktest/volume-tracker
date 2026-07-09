@@ -92,6 +92,7 @@
     <div class="tab active" data-tab="pumps">Eski pumplar <span class="badge" id="cnt-pumps">0</span></div>
     <div class="tab" data-tab="sleep">Uyuyan (watchlist) <span class="badge" id="cnt-sleep">0</span></div>
     <div class="tab" data-tab="move">Hareket başladı <span class="badge" id="cnt-move">0</span></div>
+    <div class="tab" data-tab="all">Tümü <span class="badge" id="cnt-all">0</span></div>
   </div>
 
   <!-- A. Eski pumplar -->
@@ -132,13 +133,22 @@
     <div class="status-line" id="moveHint">Uyuyan setten canlı breakout tetiği yananlar. "Fiyatları tazele" ile güncellenir.</div>
     <div class="table-wrap"><table id="tbl-move"></table></div>
   </div>
+
+  <!-- D. Tümü -->
+  <div class="panel" id="panel-all">
+    <div class="filters">
+      <label class="pill">ara <input type="text" id="a_search" placeholder="symbol…" style="width:130px"></label>
+      <span class="status-line" style="margin:0">Evrendeki tüm coinler (alpha ∩ futures).</span>
+    </div>
+    <div class="table-wrap"><table id="tbl-all"></table></div>
+  </div>
 </div>
 
 <script>
 const API = '/api/pump';
 let COINS = [];          // /coins
 let LIVE = { coins:{}, breakouts:[] };
-let sortState = { pumps:{col:'max_magnitude',dir:-1}, sleep:{col:'consolidation_days',dir:-1} };
+let sortState = { pumps:{col:'max_magnitude',dir:-1}, sleep:{col:'consolidation_days',dir:-1}, all:{col:'mcap_usd',dir:-1} };
 
 // ── helpers ──
 const N = v => (v===null||v===undefined||v==='') ? null : Number(v);
@@ -147,7 +157,8 @@ const fmtPct = v => v===null||!isFinite(v) ? '—' : (v>=0?'+':'')+Number(v).toF
 const cls = v => v===null?'':(v>=0?'pos':'neg');
 function fmtMcap(v){ v=N(v); if(v===null) return '—'; if(v>=1e9) return '$'+(v/1e9).toFixed(2)+'B'; if(v>=1e6) return '$'+(v/1e6).toFixed(1)+'M'; if(v>=1e3) return '$'+(v/1e3).toFixed(0)+'K'; return '$'+v.toFixed(0); }
 function fmtPrice(v){ v=N(v); if(v===null) return '—'; if(v>=1) return v.toFixed(4); if(v>=0.01) return v.toFixed(5); return v.toPrecision(4); }
-function venues(c){ let h=''; if(+c.is_alpha)h+='<span class="vbadge v-A">A</span>'; if(+c.is_fut)h+='<span class="vbadge v-F">F</span>'; if(+c.is_spot)h+='<span class="vbadge v-S">S</span>'; if(+c.is_upbit)h+='<span class="vbadge v-U">U</span>'; if(+c.is_bybit)h+='<span class="vbadge v-B">B</span>'; return h; }
+// spot'a çıkmış coin artık saf alpha değil -> alpha rozetini gösterme
+function venues(c){ let h=''; if(+c.is_alpha && !+c.is_spot)h+='<span class="vbadge v-A">A</span>'; if(+c.is_fut)h+='<span class="vbadge v-F">F</span>'; if(+c.is_spot)h+='<span class="vbadge v-S">S</span>'; if(+c.is_upbit)h+='<span class="vbadge v-U">U</span>'; if(+c.is_bybit)h+='<span class="vbadge v-B">B</span>'; return h; }
 const symLink = s => `<a href="pump-coin.html?symbol=${s}" class="sym">${s}</a>`;
 const cmcLink = c => c && c.cmc_slug ? `<a class="cmc" href="https://coinmarketcap.com/currencies/${c.cmc_slug}/" target="_blank" rel="noopener" title="CoinMarketCap">CMC</a>` : '';
 // alpha aşaması: bir coin hem alpha hem spot olamaz (spot'a graduate olunca saf alpha değildir)
@@ -209,7 +220,32 @@ function sortRows(rows,key,tab){
 function headerClick(tab,col){ const st=sortState[tab]; if(st.col===col)st.dir*=-1; else{st.col=col;st.dir=-1;} render(); }
 
 // ── renderers ──
-function render(){ renderPumps(); renderSleep(); renderMove(); }
+function render(){ renderPumps(); renderSleep(); renderMove(); renderAll(); }
+
+function renderAll(){
+  const term=(document.getElementById('a_search').value||'').trim().toUpperCase();
+  let rows=COINS.slice();
+  if(term) rows=rows.filter(c=>c.symbol.includes(term));
+  rows=sortRows(rows,'mcap_usd','all');
+  document.getElementById('cnt-all').textContent=rows.length;
+  const cols=[['symbol','Coin','txt'],['venue','Venue','txt'],['mcap_usd','Mcap'],['consolidation_days','Konsol.(g)'],['is_sleeping','Uyuyor'],['dist_lo7','dist_lo7'],['ret7d','7g %'],['ret30d','30g %'],['event_count','#Pump'],['max_magnitude','En büyük ×'],['fut_ath_age_days','ATH yaş(g)']];
+  const t=document.getElementById('tbl-all');
+  t.innerHTML=thead(cols,'all')+'<tbody>'+(rows.length?rows.map(c=>{
+    const dist=c._distLive??N(c.dist_lo7);
+    return `<tr>
+    <td>${symLink(c.symbol)}${cmcLink(c)}</td>
+    <td class="txt">${venues(c)}</td>
+    <td>${fmtMcap(c.mcap_usd)}</td>
+    <td>${c.consolidation_days??'—'}</td>
+    <td>${+c.is_sleeping?'<span class="fire">✓</span>':'<span class="muted">—</span>'}</td>
+    <td class="${cls(dist)}">${dist!==null?fmtN(dist,1)+'%':'—'}</td>
+    <td class="${cls(N(c.ret7d))}">${fmtPct(N(c.ret7d))}</td>
+    <td class="${cls(N(c.ret30d))}">${fmtPct(N(c.ret30d))}</td>
+    <td>${c.event_count}</td>
+    <td>${c.max_magnitude?fmtN(c.max_magnitude,1)+'×':'—'}</td>
+    <td class="muted">${c.fut_ath_age_days??'—'}</td>
+  </tr>`;}).join(''):emptyRow(cols.length))+'</tbody>';
+}
 
 function renderPumps(){
   const minMag=N(document.getElementById('f_mag').value)||0;
@@ -303,6 +339,7 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
 });
 ['f_mag','f_phase','f_upbit','f_bybit','f_nonlisting'].forEach(id=>document.getElementById(id).addEventListener('input',renderPumps));
 ['s_cons','s_dist','s_mcap','s_phase'].forEach(id=>document.getElementById(id).addEventListener('input',renderSleep));
+document.getElementById('a_search').addEventListener('input',renderAll);
 document.getElementById('btnRefresh').onclick=startRefresh;
 document.getElementById('btnLive').onclick=loadLive;
 

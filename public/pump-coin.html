@@ -85,7 +85,7 @@ const fmtPct=v=>v===null||!isFinite(v)?'—':(v>=0?'+':'')+Number(v).toFixed(1)+
 const cls=v=>v===null?'':(v>=0?'pos':'neg');
 function fmtMcap(v){v=N(v);if(v===null)return '—';if(v>=1e9)return '$'+(v/1e9).toFixed(2)+'B';if(v>=1e6)return '$'+(v/1e6).toFixed(1)+'M';if(v>=1e3)return '$'+(v/1e3).toFixed(0)+'K';return '$'+v.toFixed(0);}
 function fmtPrice(v){v=N(v);if(v===null)return '—';if(v>=1)return v.toFixed(4);if(v>=0.01)return v.toFixed(5);return v.toPrecision(4);}
-function venues(c){let h='';if(+c.is_alpha)h+='<span class="vbadge v-A">ALPHA</span>';if(+c.is_fut)h+='<span class="vbadge v-F">FUT</span>';if(+c.is_spot)h+='<span class="vbadge v-S">SPOT</span>';if(+c.is_upbit)h+='<span class="vbadge v-U">UPBIT</span>';if(+c.is_bybit)h+='<span class="vbadge v-B">BYBIT</span>';return h;}
+function venues(c){let h='';if(+c.is_alpha && !+c.is_spot)h+='<span class="vbadge v-A">ALPHA</span>';if(+c.is_fut)h+='<span class="vbadge v-F">FUT</span>';if(+c.is_spot)h+='<span class="vbadge v-S">SPOT</span>';if(+c.is_upbit)h+='<span class="vbadge v-U">UPBIT</span>';if(+c.is_bybit)h+='<span class="vbadge v-B">BYBIT</span>';return h;}
 
 async function load(){
   if(!symbol){ showErr('symbol parametresi yok'); return; }
