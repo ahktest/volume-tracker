@@ -75,6 +75,8 @@
     .kpi .sub{font-size:12px;color:#9ca3af;margin-top:5px}
     .kpi .combo{display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:2px 0;color:#cbd5e1}
     .kpi .combo b{color:#93c5fd}
+    .kpi .combo small{font-size:11px}
+    .hint{cursor:help;color:#6b7280;font-size:11px;border-bottom:1px dotted #4b5563}
   </style>
 </head>
 <body>
@@ -124,10 +126,11 @@
 
   <!-- B. Uyuyan -->
   <div class="panel" id="panel-sleep">
+    <div class="kpi-row" id="sleepStats"></div>
     <div class="filters">
       <label class="pill">min konsol. gün <input type="number" id="s_cons" value="45" step="5"></label>
-      <label class="pill">max dist_lo7 % <input type="number" id="s_dist" value="" placeholder="—"></label>
-      <label class="pill">max mcap ($) <input type="number" id="s_mcap" value="" placeholder="—"></label>
+      <label class="pill" title="Güncel fiyatın son 7 günün en düşük fiyatına % uzaklığı. 0'a yakın = dibe yapışık (breakout'a hazır). Girdiğin değerin altındakileri gösterir.">max dist_lo7 % <span class="hint">ⓘ</span> <input type="number" id="s_dist" value="" placeholder="—"></label>
+      <label class="pill" title="Piyasa değeri üst sınırı ($). Girdiğin değerin altındaki (küçük cap) coinleri gösterir. Boş = sınırsız.">max mcap ($) <span class="hint">ⓘ</span> <input type="number" id="s_mcap" value="" placeholder="—"></label>
       <label class="pill">alpha aşaması
         <select id="s_phase" style="width:auto">
           <option value="">hepsi</option>
@@ -319,7 +322,30 @@ function renderPumps(){
   </tr>`).join(''):emptyRow(cols.length)) + '</tbody>';
 }
 
+function renderSleepStats(){
+  const el=document.getElementById('sleepStats');
+  const sleeping=COINS.filter(c=>+c.is_sleeping);
+  // 1) en uzun konsolide + hiç pump yapmamış
+  const neverPumped=sleeping.filter(c=>(+c.event_count||0)===0)
+    .sort((a,b)=>(N(b.consolidation_days)||0)-(N(a.consolidation_days)||0)).slice(0,3);
+  // 2) ATH'dan en uzak (fut/alpha ATH'ın büyüğüne göre drawdown)
+  const withDD=sleeping.map(c=>{
+    const ath=Math.max(N(c.fut_ath_price)||0,N(c.alpha_ath_price)||0);
+    const last=(c._live&&c._live.last!=null)?c._live.last:N(c.last_price);
+    const dd=(ath>0&&last!=null)?(1-last/ath)*100:null;
+    return {c,dd};
+  }).filter(x=>x.dd!=null).sort((a,b)=>b.dd-a.dd).slice(0,3);
+
+  const line=(sym,mcap,right)=>`<div class="combo"><span>${symLink(sym)} <small class="muted">${fmtMcap(mcap)}</small></span>${right}</div>`;
+  const row1=neverPumped.length?neverPumped.map(c=>line(c.symbol,c.mcap_usd,`<b>${c.consolidation_days??'—'}g</b>`)).join(''):'<div class="sub">—</div>';
+  const row2=withDD.length?withDD.map(x=>line(x.c.symbol,x.c.mcap_usd,`<b class="neg">-${x.dd.toFixed(0)}%</b>`)).join(''):'<div class="sub">—</div>';
+  el.innerHTML=`
+    <div class="kpi"><div class="label">En uzun konsolide + hiç pump yapmamış</div>${row1}</div>
+    <div class="kpi"><div class="label">ATH'dan en uzak</div>${row2}</div>`;
+}
+
 function renderSleep(){
+  renderSleepStats();
   const minCons=N(document.getElementById('s_cons').value)||0;
   const maxDist=N(document.getElementById('s_dist').value);
   const maxMcap=N(document.getElementById('s_mcap').value);
