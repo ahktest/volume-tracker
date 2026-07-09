@@ -325,10 +325,12 @@ function renderPumps(){
 function renderSleepStats(){
   const el=document.getElementById('sleepStats');
   const sleeping=COINS.filter(c=>+c.is_sleeping);
-  // 1) en uzun konsolide + hiç pump yapmamış
-  const neverPumped=sleeping.filter(c=>(+c.event_count||0)===0)
-    .sort((a,b)=>(N(b.consolidation_days)||0)-(N(a.consolidation_days)||0)).slice(0,3);
-  // 2) ATH'dan en uzak (fut/alpha ATH'ın büyüğüne göre drawdown)
+  const byCons=(a,b)=>(N(b.consolidation_days)||0)-(N(a.consolidation_days)||0);
+  // 1) en uzun konsolide + hiç pump yapmamış (tüm venue)
+  const neverPumped=sleeping.filter(c=>(+c.event_count||0)===0).sort(byCons).slice(0,3);
+  // 2) aynısı ama sadece saf alpha (spot'a çıkmamış)
+  const neverPumpedAlpha=sleeping.filter(c=>(+c.event_count||0)===0 && +c.is_alpha && !+c.is_spot).sort(byCons).slice(0,3);
+  // 3) ATH'dan en uzak (fut/alpha ATH'ın büyüğüne göre drawdown)
   const withDD=sleeping.map(c=>{
     const ath=Math.max(N(c.fut_ath_price)||0,N(c.alpha_ath_price)||0);
     const last=(c._live&&c._live.last!=null)?c._live.last:N(c.last_price);
@@ -336,12 +338,15 @@ function renderSleepStats(){
     return {c,dd};
   }).filter(x=>x.dd!=null).sort((a,b)=>b.dd-a.dd).slice(0,3);
 
-  const line=(sym,mcap,right)=>`<div class="combo"><span>${symLink(sym)} <small class="muted">${fmtMcap(mcap)}</small></span>${right}</div>`;
-  const row1=neverPumped.length?neverPumped.map(c=>line(c.symbol,c.mcap_usd,`<b>${c.consolidation_days??'—'}g</b>`)).join(''):'<div class="sub">—</div>';
-  const row2=withDD.length?withDD.map(x=>line(x.c.symbol,x.c.mcap_usd,`<b class="neg">-${x.dd.toFixed(0)}%</b>`)).join(''):'<div class="sub">—</div>';
+  const line=(c,right)=>`<div class="combo"><span>${symLink(c.symbol)} ${venues(c)} <small class="muted">${fmtMcap(c.mcap_usd)}</small></span>${right}</div>`;
+  const rows=(arr,fn)=>arr.length?arr.map(fn).join(''):'<div class="sub">—</div>';
+  const row1=rows(neverPumped,c=>line(c,`<b>${c.consolidation_days??'—'}g</b>`));
+  const row2=rows(neverPumpedAlpha,c=>line(c,`<b>${c.consolidation_days??'—'}g</b>`));
+  const row3=rows(withDD,x=>line(x.c,`<b class="neg">-${x.dd.toFixed(0)}%</b>`));
   el.innerHTML=`
-    <div class="kpi"><div class="label">En uzun konsolide + hiç pump yapmamış</div>${row1}</div>
-    <div class="kpi"><div class="label">ATH'dan en uzak</div>${row2}</div>`;
+    <div class="kpi"><div class="label">En uzun konsolide + hiç pump — tümü</div>${row1}</div>
+    <div class="kpi"><div class="label">En uzun konsolide + hiç pump — saf alpha</div>${row2}</div>
+    <div class="kpi"><div class="label">ATH'dan en uzak</div>${row3}</div>`;
 }
 
 function renderSleep(){
