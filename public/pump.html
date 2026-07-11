@@ -192,6 +192,24 @@ const fmtDate = d => d ? String(d).slice(0,10) : '—';
 function dryClass(v){ if(v===null)return 'muted'; if(v<0.3)return 'pos'; if(v<=0.5)return 'warn'; if(v>0.7)return 'muted'; return ''; }
 // Sıkışma (bbw percentile): <10 sıkışık(yeşil) · 10-25 sarı · >25 gri
 function bbwClass(v){ if(v===null)return 'muted'; if(v<10)return 'pos'; if(v<=25)return 'warn'; return 'muted'; }
+// Hacim Kuruması tooltip'i (oran + streak açıklaması)
+function dryTooltip(c){
+  const dry=N(c.vol_dryup_ratio);
+  if(dry===null) return 'Hacim kuruması: veri yok (90 günden az geçmiş)';
+  let s=`Hacim oranı: son 7g ort. / son 90g ort. = ${fmtN(dry,2)} (düşük = kuru taban).`;
+  const d=c.vol_dryup_days;
+  if(d!=null) s+= ` Kuru streak: ${d} gün — ` + (d===0
+    ? 'bugün hacim eşiğin (90g ort. ×0.40) üstünde, yani kuruluk kırıldı / uyanıyor.'
+    : 'bugünden geriye kesintisiz olarak hacmin eşik altında kaldığı gün sayısı.');
+  return s;
+}
+// Sıkışma tooltip'i (basit dil)
+function bbwTooltip(c){
+  const v=N(c.bbw_percentile);
+  if(v===null) return 'Sıkışma: veri yok (90 günden az geçmiş)';
+  const seg = v<10 ? '<10: çok sıkışmış (patlamaya hazır)' : v<=25 ? '10-25: sıkışmakta' : '>25: gevşek/oynak';
+  return `Sıkışma: fiyatın ne kadar dar bir aralıkta gezindiği. Bollinger bant genişliğinin son 180 gündeki yüzdelik sırası = ${fmtN(v,0)}. Düşük = fiyat çok dar, sıkışmış; yüksek = geniş, oynak. (${seg})`;
+}
 // borsa kombinasyon anahtarı (spot varsa alpha sayılmaz)
 function comboKey(c){ const p=[]; if(+c.is_alpha&&!+c.is_spot)p.push('ALPHA'); if(+c.is_fut)p.push('FUT'); if(+c.is_spot)p.push('SPOT'); if(+c.is_upbit)p.push('UPBIT'); if(+c.is_bybit)p.push('BYBIT'); return p.join(' + ')||'—'; }
 
@@ -384,8 +402,8 @@ function renderSleep(){
     <td>${symLink(c.symbol)}${cmcLink(c)}</td>
     <td class="txt">${venues(c)}</td>
     <td><b>${c.consolidation_days??'—'}</b></td>
-    <td class="${dryClass(dry)}" title="${c.vol_dryup_days!=null?c.vol_dryup_days+' gün kurumada':'veri yok'}">${dry!==null?fmtN(dry,2):'—'}</td>
-    <td class="${bbwClass(bbw)}">${bbw!==null?fmtN(bbw,0):'—'}</td>
+    <td class="${dryClass(dry)}" title="${dryTooltip(c)}">${dry!==null?fmtN(dry,2):'—'}</td>
+    <td class="${bbwClass(bbw)}" title="${bbwTooltip(c)}">${bbw!==null?fmtN(bbw,0):'—'}</td>
     <td>${fmtN(c.cons_range_pct,0)}%</td>
     <td class="${cls(dist)}">${dist!==null?fmtN(dist,1)+'%':'—'}</td>
     <td class="${cls(N(c.ret7d))}">${fmtPct(N(c.ret7d))}</td>
