@@ -77,7 +77,7 @@ module.exports = (pool) => {
       const [ticker, funding, sleepers] = await Promise.all([
         binance.ticker24hAll(),
         binance.fundingAll(),
-        pool.query(`SELECT symbol, cons_mid, vol_base, low_7d, is_sleeping
+        pool.query(`SELECT symbol, cons_mid, vol_base, low_7d, band_top_20d, vol_avg_20d, is_sleeping
                     FROM coin_metrics WHERE is_sleeping = 1`).then(r => r[0]),
       ]);
 
@@ -99,19 +99,25 @@ module.exports = (pool) => {
         const consMid = s.cons_mid != null ? Number(s.cons_mid) : null;
         const volBase = s.vol_base != null ? Number(s.vol_base) : null;
         const low7    = s.low_7d != null ? Number(s.low_7d) : null;
+        const bandTop = s.band_top_20d != null ? Number(s.band_top_20d) : null;
+        const volAvg  = s.vol_avg_20d != null ? Number(s.vol_avg_20d) : null;
         const bandBreak = consMid != null && t.last > consMid * (1 + cfg.CONS_BAND);
         const volSpike  = volBase != null && volBase > 0 && t.quoteVol > volBase * cfg.BREAKOUT_VOL_MULT;
         const chgBreak  = t.chgPct >= cfg.BREAKOUT_CHG_PCT;
-        if (bandBreak || volSpike || chgBreak) {
+        // KIRILIM (20g yüksek + hacim): guncel > band_top*1.01 VE hacim > vol_avg*1.5
+        const kirilim   = bandTop != null && volAvg != null && volAvg > 0
+          && t.last > bandTop * cfg.KIRILIM_PRICE_MULT && t.quoteVol > volAvg * cfg.KIRILIM_VOL_MULT;
+        if (bandBreak || volSpike || chgBreak || kirilim) {
           breakouts.push({
             symbol: s.symbol, last: t.last, chgPct: t.chgPct, quoteVol: t.quoteVol,
             funding: funding.get(`${s.symbol}USDT`) ?? null,
             dist_lo7: low7 && low7 > 0 ? (t.last / low7 - 1) * 100 : null,
-            band_break: bandBreak, vol_spike: volSpike, chg_break: chgBreak,
+            band_break: bandBreak, vol_spike: volSpike, chg_break: chgBreak, kirilim,
           });
         }
       }
-      breakouts.sort((a, b) => (b.chgPct || 0) - (a.chgPct || 0));
+      // kırılım yapanlar en üstte, sonra 24h değişime göre
+      breakouts.sort((a, b) => (Number(b.kirilim) - Number(a.kirilim)) || ((b.chgPct || 0) - (a.chgPct || 0)));
       res.json({ updatedAt: new Date(), coins, breakouts });
     } catch (err) {
       console.error('[pump/live] hata:', err);

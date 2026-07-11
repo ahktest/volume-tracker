@@ -57,7 +57,7 @@
     .sym a{text-decoration:none}
     .cmc{display:inline-block;font-size:9px;font-weight:700;border-radius:4px;padding:1px 4px;margin-left:4px;background:#3861fb22;color:#7f9cf5;text-decoration:none;vertical-align:middle}
     .cmc:hover{background:#3861fb44;color:#a5b4fc}
-    .pos{color:#34d399}.neg{color:#f87171}.muted{color:#6b7280}
+    .pos{color:#34d399}.neg{color:#f87171}.muted{color:#6b7280}.warn{color:#fbbf24}
     .vbadge{display:inline-block;font-size:10px;font-weight:700;border-radius:4px;padding:1px 5px;margin-right:3px}
     .v-A{background:#7c3aed33;color:#c4b5fd}.v-F{background:#2563eb33;color:#93c5fd}
     .v-S{background:#05966933;color:#6ee7b7}.v-U{background:#dc262633;color:#fca5a5}.v-B{background:#ea580c33;color:#fdba74}
@@ -188,6 +188,10 @@ const cmcLink = c => c && c.cmc_slug ? `<a class="cmc" href="https://coinmarketc
 // alpha aşaması: bir coin hem alpha hem spot olamaz (spot'a graduate olunca saf alpha değildir)
 function passPhase(c,val){ if(!val) return true; return val==='alpha' ? !+c.is_spot : !!+c.is_spot; }
 const fmtDate = d => d ? String(d).slice(0,10) : '—';
+// Hacim kuruması rengi: <0.3 kuru(yeşil) · 0.3-0.5 sarı · >0.7 normal(gri)
+function dryClass(v){ if(v===null)return 'muted'; if(v<0.3)return 'pos'; if(v<=0.5)return 'warn'; if(v>0.7)return 'muted'; return ''; }
+// Sıkışma (bbw percentile): <10 sıkışık(yeşil) · 10-25 sarı · >25 gri
+function bbwClass(v){ if(v===null)return 'muted'; if(v<10)return 'pos'; if(v<=25)return 'warn'; return 'muted'; }
 // borsa kombinasyon anahtarı (spot varsa alpha sayılmaz)
 function comboKey(c){ const p=[]; if(+c.is_alpha&&!+c.is_spot)p.push('ALPHA'); if(+c.is_fut)p.push('FUT'); if(+c.is_spot)p.push('SPOT'); if(+c.is_upbit)p.push('UPBIT'); if(+c.is_bybit)p.push('BYBIT'); return p.join(' + ')||'—'; }
 
@@ -371,14 +375,17 @@ function renderSleep(){
   if(maxMcap!==null) rows=rows.filter(c=>N(c.mcap_usd)!==null&&N(c.mcap_usd)<=maxMcap);
   rows=sortRows(rows,'consolidation_days','sleep');
   document.getElementById('cnt-sleep').textContent=rows.length;
-  const cols=[['symbol','Coin','txt'],['venue','Venue','txt'],['consolidation_days','Konsol.(g)'],['cons_range_pct','Range %'],['dist_lo7','dist_lo7'],['ret7d','7g %'],['mcap_usd','Mcap'],['max_magnitude','En büyük ×'],['fut_ath_age_days','ATH yaş(g)'],['act','']];
+  const cols=[['symbol','Coin','txt'],['venue','Venue','txt'],['consolidation_days','Konsol.(g)'],['vol_dryup_ratio','Hacim Kuruması'],['bbw_percentile','Sıkışma'],['cons_range_pct','Range %'],['dist_lo7','dist_lo7'],['ret7d','7g %'],['mcap_usd','Mcap'],['max_magnitude','En büyük ×'],['fut_ath_age_days','ATH yaş(g)'],['act','']];
   const t=document.getElementById('tbl-sleep');
   t.innerHTML=thead(cols,'sleep')+'<tbody>'+(rows.length?rows.map(c=>{
     const dist=c._distLive??N(c.dist_lo7);
+    const dry=N(c.vol_dryup_ratio), bbw=N(c.bbw_percentile);
     return `<tr>
     <td>${symLink(c.symbol)}${cmcLink(c)}</td>
     <td class="txt">${venues(c)}</td>
     <td><b>${c.consolidation_days??'—'}</b></td>
+    <td class="${dryClass(dry)}" title="${c.vol_dryup_days!=null?c.vol_dryup_days+' gün kurumada':'veri yok'}">${dry!==null?fmtN(dry,2):'—'}</td>
+    <td class="${bbwClass(bbw)}">${bbw!==null?fmtN(bbw,0):'—'}</td>
     <td>${fmtN(c.cons_range_pct,0)}%</td>
     <td class="${cls(dist)}">${dist!==null?fmtN(dist,1)+'%':'—'}</td>
     <td class="${cls(N(c.ret7d))}">${fmtPct(N(c.ret7d))}</td>
@@ -398,6 +405,7 @@ function renderMove(){
     (rows.length?rows.map(b=>`<tr>
       <td>${symLink(b.symbol)}${cmcLink(COINS.find(c=>c.symbol===b.symbol))}</td>
       <td class="txt">
+        ${b.kirilim?'<span class="fire">🔥 KIRILIM</span> ':''}
         ${b.band_break?'<span class="fire">BAND</span> ':''}
         ${b.vol_spike?'<span class="fire">HACİM</span> ':''}
         ${b.chg_break?'<span class="fire">%</span>':''}
