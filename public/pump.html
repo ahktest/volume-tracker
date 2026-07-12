@@ -447,12 +447,23 @@ function thead(cols,tab){
 const emptyRow=n=>`<tr><td colspan="${n}" class="empty">Kayıt yok</td></tr>`;
 
 // ── tabs & events ──
-document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+// Sekme deep-link: #hareket / #uyuyan / #pumplar / #tumu (ve ham data-tab adları)
+const HASH_TO_TAB={hareket:'move',uyuyan:'sleep',pumplar:'pumps',eski:'pumps',tumu:'all',all:'all',move:'move',sleep:'sleep',pumps:'pumps'};
+const TAB_TO_HASH={move:'hareket',sleep:'uyuyan',pumps:'pumplar',all:'tumu'};
+function activateTab(name){
+  const tab=document.querySelector(`.tab[data-tab="${name}"]`); if(!tab) return;
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
   document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
-  t.classList.add('active');
-  document.getElementById('panel-'+t.dataset.tab).classList.add('active');
+  tab.classList.add('active');
+  document.getElementById('panel-'+name).classList.add('active');
+}
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  activateTab(t.dataset.tab);
+  history.replaceState(null,'','#'+(TAB_TO_HASH[t.dataset.tab]||t.dataset.tab));
 });
+function applyHash(){ const h=(location.hash||'').replace('#','').toLowerCase(); if(h && HASH_TO_TAB[h]) activateTab(HASH_TO_TAB[h]); }
+window.addEventListener('hashchange',applyHash);
+applyHash();
 ['f_mag','f_phase','f_upbit','f_bybit','f_nonlisting'].forEach(id=>document.getElementById(id).addEventListener('input',renderPumps));
 ['s_cons','s_dist','s_mcap','s_phase'].forEach(id=>document.getElementById(id).addEventListener('input',renderSleep));
 document.getElementById('a_search').addEventListener('input',renderAll);

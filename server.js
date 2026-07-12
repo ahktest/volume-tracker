@@ -1164,6 +1164,8 @@ app.get('/api/signals/stats', requireDashKey, async (req, res) => {
 // ALPHA–FUTURES PUMP DASHBOARD (public)
 // ────────────────────────────────────────────
 app.use('/api/pump', require('./routes/alphaPump')(pool));
+// Zamanlayıcı: gecelik 04:00 tam güncelleme + 15dk telegram breakout bildirimi
+require('./lib/scheduler').start(pool);
 
 // Sunucu baslatma
 app.listen(PORT, () => {
