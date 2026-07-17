@@ -134,7 +134,7 @@ app.get("/ping", (req, res) => res.send("pong"));
 const EXCHANGE_CONFIG = {
   binance:      { table: 'futures_positions', balanceCol: 'total_futures_balance' },
   bybit:        { table: 'bybitfuturepos',    balanceCol: 'total_balance' },
-  binancefable: { table: 'tradefable',        balanceCol: 'totalfuturebalance' },
+  binancefable: { table: 'tradefable',        balanceCol: 'totalfuturebalance', accountCol: 'account_id', accounts: ['default', 'ahk'], balanceAccounts: ['ahk'] },
 };
 
 function getExchange(name) {
@@ -150,6 +150,34 @@ function getExchange(name) {
 // pnl - funding - commission (NULL guvenli)
 const PNL_EXPR = `pnl - IFNULL(funding_fee, 0) - IFNULL(commission, 0)`;
 
+// account_id IN (...) filtresi. Degerler guvenli config'ten (kullanici girdisi degil).
+function inClauseLiteral(col, values) {
+  if (!col || !Array.isArray(values) || !values.length) return '';
+  const vals = values.map(a => `'${String(a).replace(/'/g, "''")}'`).join(',');
+  return ` AND \`${col}\` IN (${vals})`;
+}
+// PNL / istatistik / breakdown: tum takip edilen hesaplar (default + ahk)
+function accountFilterLiteral(cfg) {
+  return cfg && cfg.accountCol ? inClauseLiteral(cfg.accountCol, cfg.accounts) : '';
+}
+// Bakiye (total balance): sadece balanceAccounts (ahk). Tanimli degilse accounts'a duser.
+function balanceFilterLiteral(cfg) {
+  return cfg && cfg.accountCol ? inClauseLiteral(cfg.accountCol, cfg.balanceAccounts || cfg.accounts) : '';
+}
+
+// Coklu hesap gunluk birlesik bakiye: her hesabin gunluk SON bakiyesi -> gune gore topla
+function combinedDailyBalanceSql(cfg, acc) {
+  return `
+    SELECT date, SUM(CAST(bal AS DECIMAL(30,8))) AS balance FROM (
+      SELECT DATE(date2) AS date, \`${cfg.accountCol}\` AS acc,
+        SUBSTRING_INDEX(GROUP_CONCAT(\`${cfg.balanceCol}\` ORDER BY date2 DESC SEPARATOR '~'), '~', 1) AS bal
+      FROM \`${cfg.table}\`
+      WHERE status='CLOSED' AND \`${cfg.balanceCol}\` IS NOT NULL AND date2 IS NOT NULL${acc}
+      GROUP BY DATE(date2), \`${cfg.accountCol}\`
+    ) t
+    GROUP BY date ORDER BY date ASC`;
+}
+
 /**
  * GET /api/positions/:exchange/pnl?since_days=30
  */
@@ -158,11 +186,12 @@ app.get('/api/positions/:exchange/pnl', requireDashKey, async (req, res) => {
     const cfg = getExchange(req.params.exchange);
     const { since_days = '30' } = req.query;
     const { where, params } = buildWhereSinceDays(since_days);
+    const acc = accountFilterLiteral(cfg);
 
     const [dailyRows] = await pool.query(`
       SELECT DATE(date2) AS date, SUM(${PNL_EXPR}) AS pnl
       FROM \`${cfg.table}\`
-      WHERE ${where}
+      WHERE ${where}${acc}
       GROUP BY DATE(date2)
       ORDER BY DATE(date2) ASC
     `, params);
@@ -174,7 +203,7 @@ app.get('/api/positions/:exchange/pnl', requireDashKey, async (req, res) => {
         COUNT(*) AS total,
         SUM(${PNL_EXPR}) AS totalPnl
       FROM \`${cfg.table}\`
-      WHERE ${where}
+      WHERE ${where}${acc}
     `, params);
 
     const wins   = Number(wl.wins || 0);
@@ -205,6 +234,7 @@ app.get('/api/positions/:exchange/summary', requireDashKey, async (req, res) => 
     const cfg = getExchange(req.params.exchange);
     const { since_days = '30' } = req.query;
     const { where, params } = buildWhereSinceDays(since_days);
+    const acc = accountFilterLiteral(cfg);
 
     const [rows] = await pool.query(`
       SELECT
@@ -214,7 +244,7 @@ app.get('/api/positions/:exchange/summary', requireDashKey, async (req, res) => 
         COUNT(*) AS total,
         SUM(${PNL_EXPR}) AS pnl
       FROM \`${cfg.table}\`
-      WHERE ${where}
+      WHERE ${where}${acc}
       GROUP BY COALESCE(source, 'unknown')
     `, params);
 
@@ -246,6 +276,7 @@ app.get('/api/positions/:exchange/daily', requireDashKey, async (req, res) => {
   try {
     const cfg = getExchange(req.params.exchange);
     const limit = Math.min(Number(req.query.limit || 14) || 14, 60);
+    const acc = accountFilterLiteral(cfg);
 
     const [rows] = await pool.query(`
       SELECT
@@ -254,7 +285,7 @@ app.get('/api/positions/:exchange/daily', requireDashKey, async (req, res) => {
         SUM(CASE WHEN (${PNL_EXPR}) < 0 THEN 1 ELSE 0 END) AS losses,
         SUM(${PNL_EXPR}) AS pnl
       FROM \`${cfg.table}\`
-      WHERE status='CLOSED' AND pnl IS NOT NULL AND date2 IS NOT NULL
+      WHERE status='CLOSED' AND pnl IS NOT NULL AND date2 IS NOT NULL${acc}
       GROUP BY DATE(date2)
       ORDER BY DATE(date2) DESC
       LIMIT ?
@@ -279,6 +310,25 @@ app.get('/api/positions/:exchange/balance-changes', requireDashKey, async (req, 
   try {
     const cfg = getExchange(req.params.exchange);
     const tbl = cfg.table, bc = cfg.balanceCol;
+
+    // binancefable: bakiye yalnizca balanceAccounts (ahk) hesabindan
+    if (cfg.accountCol) {
+      const acc = balanceFilterLiteral(cfg);
+      const [rows] = await pool.query(combinedDailyBalanceSql(cfg, acc));
+      const series = rows.map(r => ({ t: Date.parse(r.date + 'T00:00:00Z'), bal: Number(r.balance || 0) }));
+      const diffWindow = (ms) => {
+        const seg = series.filter(s => s.t >= Date.now() - ms);
+        return seg.length ? seg[seg.length - 1].bal - seg[0].bal : 0;
+      };
+      const yr = new Date().getUTCFullYear();
+      const ytd = series.filter(s => new Date(s.t).getUTCFullYear() === yr);
+      res.json({
+        diff_7d:  Number(diffWindow(7 * 86400000).toFixed(8)),
+        diff_30d: Number(diffWindow(30 * 86400000).toFixed(8)),
+        diff_ytd: ytd.length ? Number((ytd[ytd.length - 1].bal - ytd[0].bal).toFixed(8)) : 0,
+      });
+      return;
+    }
 
     const sql = `
       SELECT
@@ -334,13 +384,19 @@ app.get('/api/positions/:exchange/balance-changes', requireDashKey, async (req, 
 app.get('/api/positions/:exchange/balance-history', requireDashKey, async (req, res) => {
   try {
     const cfg = getExchange(req.params.exchange);
-    const [rows] = await pool.query(`
-      SELECT DATE(date2) AS date, MAX(\`${cfg.balanceCol}\`) AS balance
-      FROM \`${cfg.table}\`
-      WHERE status='CLOSED' AND \`${cfg.balanceCol}\` IS NOT NULL AND date2 IS NOT NULL
-      GROUP BY DATE(date2)
-      ORDER BY DATE(date2) ASC
-    `);
+    let rows;
+    if (cfg.accountCol) {
+      // binancefable: bakiye yalnizca balanceAccounts (ahk) hesabindan
+      [rows] = await pool.query(combinedDailyBalanceSql(cfg, balanceFilterLiteral(cfg)));
+    } else {
+      [rows] = await pool.query(`
+        SELECT DATE(date2) AS date, MAX(\`${cfg.balanceCol}\`) AS balance
+        FROM \`${cfg.table}\`
+        WHERE status='CLOSED' AND \`${cfg.balanceCol}\` IS NOT NULL AND date2 IS NOT NULL
+        GROUP BY DATE(date2)
+        ORDER BY DATE(date2) ASC
+      `);
+    }
     res.json(rows.map(r => ({ date: r.date, balance: Number(r.balance || 0) })));
   } catch (err) {
     console.error('[/api/positions/:exchange/balance-history] Hata:', err);
@@ -357,6 +413,7 @@ app.get('/api/positions/binancefable/breakdown', requireDashKey, async (req, res
   try {
     const { since_days = '30' } = req.query;
     const { where, params } = buildWhereSinceDays(since_days);
+    const acc = accountFilterLiteral(getExchange('binancefable'));
 
     const listingExpr = `
       CASE
@@ -375,7 +432,7 @@ app.get('/api/positions/binancefable/breakdown', requireDashKey, async (req, res
           COUNT(*) AS total,
           SUM(${PNL_EXPR}) AS pnl
         FROM \`tradefable\`
-        WHERE ${where}
+        WHERE ${where}${acc}
         GROUP BY ${groupExpr}
       `, params);
       const out = {};
