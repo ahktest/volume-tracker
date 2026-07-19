@@ -304,29 +304,31 @@ function render(){ renderPumps(); renderSleep(); renderMove(); renderTech(); ren
 function rsiClass(v){ if(v===null)return 'muted'; if(v<=30)return 'pos'; if(v>=70)return 'neg'; return ''; }
 
 // ── teknik sinyal durumları (coin_metrics kolonlarından türetilir) ──
+const cfgMaRecent=2; // MA_CROSS_RECENT_DAYS ile aynı — golden/death cross bu kadar gün içindeyse pozitif
 // RSI: sekme filtresi zaten "yukarı kesiş" gerektirir -> pozitif.
 const rsiPos = c => N(c.rsi_cross_days_ago)!==null;
-// Golden/Death: ma50>ma200 -> golden(pozitif). null=yetersiz geçmiş (200g yok).
-function maState(c){ const f=N(c.ma50),s=N(c.ma200); if(f===null||s===null) return null; return f>s?1:-1; }
-// MACD boğa: macd_hist>0 (macd çizgisi > sinyal). null=yetersiz geçmiş.
-function macdState(c){ const h=N(c.macd_hist); if(h===null) return null; return h>0?1:-1; }
-// Hepsi pozitif: RSI↑ + golden + MACD boğa (üçü de kesin pozitif)
-const allPositive = c => rsiPos(c) && maState(c)===1 && macdState(c)===1;
+// Golden/Death: {gd:+1 golden/-1 death, recent:kesişim<=2g, days}. null=yetersiz geçmiş (200g yok).
+function maState(c){ const f=N(c.ma50),s=N(c.ma200); if(f===null||s===null) return null;
+  const days=N(c.ma_cross_days_ago); return { gd:f>s?1:-1, recent:days!==null&&days<=cfgMaRecent, days }; }
+// MA pozitif = golden VE kesişim son 2 gün içinde
+const maPos = c => { const m=maState(c); return m!==null && m.gd===1 && m.recent; };
+// MACD pozitif: macd çizgisi 0'ın üzerinde. null=yetersiz geçmiş.
+function macdState(c){ const v=N(c.macd); if(v===null) return null; return v>0?1:-1; }
+// Hepsi pozitif: RSI↑ + taze golden cross(≤2g) + MACD>0
+const allPositive = c => rsiPos(c) && maPos(c) && macdState(c)===1;
 
-const cfgMaRecent=10; // MA_CROSS_RECENT_DAYS ile aynı (yeni cross = ★)
 // kontrol edilen araç rozetleri (coin yanı)
 function techBadges(c){
-  const md=N(c.ma_cross_days_ago), rec=cfgMaRecent;
-  const ma=maState(c);
+  const m=maState(c);
   let maB;
-  if(ma===null) maB='<span class="sig muted" title="MA200 için yetersiz geçmiş (200g yok)">MA?</span>';
-  else if(ma===1) maB=`<span class="sig pos" title="Golden: MA50 > MA200${md!==null&&md<=rec?` — ${md}g önce kesti`:''}">${md!==null&&md<=rec?'GC★':'GC'}</span>`;
-  else maB=`<span class="sig neg" title="Death: MA50 < MA200${md!==null&&md<=rec?` — ${md}g önce kesti`:''}">${md!==null&&md<=rec?'DC★':'DC'}</span>`;
-  const mc=macdState(c), mcd=N(c.macd_cross_days_ago);
+  if(m===null) maB='<span class="sig muted" title="MA200 için yetersiz geçmiş (200g yok)">MA?</span>';
+  else if(m.gd===1) maB=`<span class="sig ${m.recent?'pos':'muted'}" title="Golden: MA50 > MA200${m.days!==null?` — ${m.days}g önce kesti`:''}${m.recent?'':` (kesişim ${cfgMaRecent}g'den eski, pozitif sayılmaz)`}">GC</span>`;
+  else maB=`<span class="sig ${m.recent?'neg':'muted'}" title="Death: MA50 < MA200${m.days!==null?` — ${m.days}g önce kesti`:''}">DC</span>`;
+  const mc=macdState(c);
   let mcB;
   if(mc===null) mcB='<span class="sig muted" title="MACD için yetersiz geçmiş">MACD?</span>';
-  else if(mc===1) mcB=`<span class="sig pos" title="MACD boğa: çizgi > sinyal${mcd!==null&&mcd<=rec?` — ${mcd}g önce kesti`:''}">MACD↑</span>`;
-  else mcB='<span class="sig neg" title="MACD ayı: çizgi < sinyal">MACD↓</span>';
+  else if(mc===1) mcB='<span class="sig pos" title="MACD 0 üzerinde (pozitif)">MACD↑</span>';
+  else mcB='<span class="sig neg" title="MACD 0 altında (negatif)">MACD↓</span>';
   return `<span class="sig pos" title="RSI aşırı satımdan yukarı kesiş">RSI↑</span>${maB}${mcB}`;
 }
 
