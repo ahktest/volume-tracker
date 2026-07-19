@@ -89,6 +89,29 @@ module.exports = (pool) => {
     res.json({ sent: ok });
   });
 
+  // ── GET /tech-tg-test : Teknik Takip grubuna örnek mesaj (aynı ipv4-safe sendMessage) ──
+  // ?n=3 detaylı örnek | ?n=8 özet örnek. Örnek mesajı revize etmek için buradaki SAMPLE'ı düzenle.
+  router.get('/tech-tg-test', async (req, res) => {
+    const tg = require('../lib/telegram');
+    const { buildMessage } = require('../lib/techNotify');
+    const n = Math.max(1, Math.min(20, +req.query.n || 3));
+    // örnek adaylar (gerçek run ile aynı {c,cat,repeat} şekli)
+    const SAMPLE = [
+      { c: { symbol: 'SOON',  rsi14: 38.5, rsi_cross_days_ago: 0, dist_lo7: 3.2,  last_price: 0.1234 }, cat: 'TAM',      repeat: false },
+      { c: { symbol: 'PONKE', rsi14: 41.0, rsi_cross_days_ago: 1, dist_lo7: 8.1,  last_price: 1.2345 }, cat: 'RSI+MACD', repeat: true  },
+      { c: { symbol: 'ZORA',  rsi14: 33.4, rsi_cross_days_ago: 2, dist_lo7: 1.0,  last_price: 0.0456 }, cat: 'RSI+GC',   repeat: false },
+      { c: { symbol: 'AVAX',  rsi14: 44.2, rsi_cross_days_ago: 1, dist_lo7: 5.5,  last_price: 22.34  }, cat: 'RSI+MACD', repeat: false },
+      { c: { symbol: 'HYPE',  rsi14: 39.9, rsi_cross_days_ago: 0, dist_lo7: 2.1,  last_price: 12.34  }, cat: 'TAM',      repeat: false },
+      { c: { symbol: 'WIF',   rsi14: 42.7, rsi_cross_days_ago: 2, dist_lo7: 9.0,  last_price: 0.9876 }, cat: 'RSI+GC',   repeat: true  },
+      { c: { symbol: 'ENA',   rsi14: 36.1, rsi_cross_days_ago: 1, dist_lo7: 4.4,  last_price: 0.5432 }, cat: 'RSI+MACD', repeat: false },
+      { c: { symbol: 'PENGU', rsi14: 40.3, rsi_cross_days_ago: 0, dist_lo7: 6.7,  last_price: 0.0321 }, cat: 'TAM',      repeat: false },
+    ];
+    const sample = Array.from({ length: n }, (_, i) => SAMPLE[i % SAMPLE.length]);
+    const text = buildMessage(sample);
+    const sent = await tg.sendMessage(text, { chat_id: cfg.TECH_TG_CHAT_ID, message_thread_id: cfg.TECH_TG_THREAD_ID });
+    res.json({ sent, n, preview: text });
+  });
+
   // ── POST /refresh : 258 coin STORE taraması (async job) ──
   router.post('/refresh', async (req, res) => {
     try {
