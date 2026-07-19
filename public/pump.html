@@ -65,6 +65,10 @@
     .tag-guclu{background:#dc262633;color:#fca5a5}.tag-yavas{background:#3b82f633;color:#93c5fd}
     .tag-listing{background:#4b556333;color:#9ca3af}
     .fire{background:#f59e0b22;color:#fbbf24;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700}
+    /* Teknik Takip'te aynı anda "hareket başladı"da olan coin: yeşil satır + etiket */
+    tr.movehit td{background:#05966918}
+    tr.movehit:hover td{background:#05966926}
+    .movetag{background:#05966933;color:#6ee7b7;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;white-space:nowrap}
     .empty{padding:40px;text-align:center;color:#6b7280}
     .rowbtn{background:#1f2937;color:#93c5fd;border:1px solid #374151;border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer}
     .rowbtn:hover{background:#374151}
@@ -298,13 +302,17 @@ function renderTech(){
   rows=rows.filter(c=>passPhase(c,document.getElementById('t_phase').value));
   if(maxRsi!==null) rows=rows.filter(c=>N(c.rsi14)!==null && N(c.rsi14)<=maxRsi);
   rows=sortRows(rows,'rsi_cross_days_ago','tech');
+  // "Hareket başladı"da da olan coinleri en tepeye sabitle (grup içi sıra korunur)
+  const moveSet=new Set((LIVE.breakouts||[]).map(b=>b.symbol));
+  rows=[...rows.filter(c=>moveSet.has(c.symbol)), ...rows.filter(c=>!moveSet.has(c.symbol))];
   document.getElementById('cnt-tech').textContent=rows.length;
   const cols=[['symbol','Coin','txt'],['venue','Venue','txt'],['rsi14','RSI'],['rsi_ma','RSI ort.'],['rsi_cross_days_ago','Kesişim (g önce)'],['dist_lo7','dist_lo7'],['ret7d','7g %'],['consolidation_days','Konsol.(g)'],['mcap_usd','Mcap'],['max_magnitude','En büyük ×']];
   const t=document.getElementById('tbl-tech');
   t.innerHTML=thead(cols,'tech')+'<tbody>'+(rows.length?rows.map(c=>{
     const dist=c._distLive??N(c.dist_lo7), rsi=N(c.rsi14), d=N(c.rsi_cross_days_ago);
-    return `<tr>
-    <td>${symLink(c.symbol)}${cmcLink(c)}</td>
+    const hit=moveSet.has(c.symbol);
+    return `<tr class="${hit?'movehit':''}">
+    <td>${symLink(c.symbol)}${cmcLink(c)}${hit?' <span class="movetag" title="Bu coin \'Hareket başladı\' sekmesinde de yanıyor">🚀 hareket başladı</span>':''}</td>
     <td class="txt">${venues(c)}</td>
     <td class="${rsiClass(rsi)}"><b>${rsi!==null?fmtN(rsi,1):'—'}</b></td>
     <td>${c.rsi_ma!==null&&c.rsi_ma!==undefined?fmtN(N(c.rsi_ma),1):'—'}</td>
