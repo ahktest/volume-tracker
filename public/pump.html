@@ -69,6 +69,13 @@
     tr.movehit td{background:#05966918}
     tr.movehit:hover td{background:#05966926}
     .movetag{background:#05966933;color:#6ee7b7;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;white-space:nowrap}
+    /* Tüm sinyaller pozitif: altın vurgulu satır (hareket grubunun altına sabitlenir) */
+    tr.allpos td{background:#f59e0b14}
+    tr.allpos:hover td{background:#f59e0b22}
+    .postag{background:#f59e0b33;color:#fbbf24;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;white-space:nowrap}
+    /* kontrol edilen teknik araç rozetleri (coin yanı) */
+    .sig{display:inline-block;font-size:9px;font-weight:700;border-radius:4px;padding:1px 5px;margin-left:3px;vertical-align:middle}
+    .sig.pos{background:#05966933;color:#6ee7b7}.sig.neg{background:#dc262633;color:#fca5a5}.sig.muted{background:#37415133;color:#9ca3af}
     .empty{padding:40px;text-align:center;color:#6b7280}
     .rowbtn{background:#1f2937;color:#93c5fd;border:1px solid #374151;border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer}
     .rowbtn:hover{background:#374151}
@@ -167,6 +174,7 @@
           <option value="alpha">saf alpha (spot değil)</option>
           <option value="spot">spot'a çıkmış</option>
         </select></label>
+      <label class="pill check" title="Sadece RSI↑ + Golden Cross + MACD boğa — üçü de pozitif olanlar"><input type="checkbox" id="t_allpos"> sadece hepsi pozitif</label>
     </div>
     <div class="table-wrap"><table id="tbl-tech"></table></div>
   </div>
@@ -294,32 +302,65 @@ function render(){ renderPumps(); renderSleep(); renderMove(); renderTech(); ren
 
 // RSI rengi: <=30 aşırı satım(yeşil) · >=70 aşırı alım(kırmızı) · arası nötr
 function rsiClass(v){ if(v===null)return 'muted'; if(v<=30)return 'pos'; if(v>=70)return 'neg'; return ''; }
+
+// ── teknik sinyal durumları (coin_metrics kolonlarından türetilir) ──
+// RSI: sekme filtresi zaten "yukarı kesiş" gerektirir -> pozitif.
+const rsiPos = c => N(c.rsi_cross_days_ago)!==null;
+// Golden/Death: ma50>ma200 -> golden(pozitif). null=yetersiz geçmiş (200g yok).
+function maState(c){ const f=N(c.ma50),s=N(c.ma200); if(f===null||s===null) return null; return f>s?1:-1; }
+// MACD boğa: macd_hist>0 (macd çizgisi > sinyal). null=yetersiz geçmiş.
+function macdState(c){ const h=N(c.macd_hist); if(h===null) return null; return h>0?1:-1; }
+// Hepsi pozitif: RSI↑ + golden + MACD boğa (üçü de kesin pozitif)
+const allPositive = c => rsiPos(c) && maState(c)===1 && macdState(c)===1;
+
+const cfgMaRecent=10; // MA_CROSS_RECENT_DAYS ile aynı (yeni cross = ★)
+// kontrol edilen araç rozetleri (coin yanı)
+function techBadges(c){
+  const md=N(c.ma_cross_days_ago), rec=cfgMaRecent;
+  const ma=maState(c);
+  let maB;
+  if(ma===null) maB='<span class="sig muted" title="MA200 için yetersiz geçmiş (200g yok)">MA?</span>';
+  else if(ma===1) maB=`<span class="sig pos" title="Golden: MA50 > MA200${md!==null&&md<=rec?` — ${md}g önce kesti`:''}">${md!==null&&md<=rec?'GC★':'GC'}</span>`;
+  else maB=`<span class="sig neg" title="Death: MA50 < MA200${md!==null&&md<=rec?` — ${md}g önce kesti`:''}">${md!==null&&md<=rec?'DC★':'DC'}</span>`;
+  const mc=macdState(c), mcd=N(c.macd_cross_days_ago);
+  let mcB;
+  if(mc===null) mcB='<span class="sig muted" title="MACD için yetersiz geçmiş">MACD?</span>';
+  else if(mc===1) mcB=`<span class="sig pos" title="MACD boğa: çizgi > sinyal${mcd!==null&&mcd<=rec?` — ${mcd}g önce kesti`:''}">MACD↑</span>`;
+  else mcB='<span class="sig neg" title="MACD ayı: çizgi < sinyal">MACD↓</span>';
+  return `<span class="sig pos" title="RSI aşırı satımdan yukarı kesiş">RSI↑</span>${maB}${mcB}`;
+}
+
 function renderTech(){
   const maxDays=N(document.getElementById('t_days').value); const md=maxDays===null?2:maxDays;
   document.getElementById('techMaxDays').textContent=md;
   const maxRsi=N(document.getElementById('t_rsi').value);
+  const onlyAll=document.getElementById('t_allpos').checked;
   let rows=COINS.filter(c=>{const d=N(c.rsi_cross_days_ago); return d!==null && d<=md;});
   rows=rows.filter(c=>passPhase(c,document.getElementById('t_phase').value));
   if(maxRsi!==null) rows=rows.filter(c=>N(c.rsi14)!==null && N(c.rsi14)<=maxRsi);
+  if(onlyAll) rows=rows.filter(allPositive);
   rows=sortRows(rows,'rsi_cross_days_ago','tech');
-  // "Hareket başladı"da da olan coinleri en tepeye sabitle (grup içi sıra korunur)
+  // Kademeli sabitleme: 1) Hareket başladı  2) hepsi pozitif  3) diğerleri (grup içi sıra korunur)
   const moveSet=new Set((LIVE.breakouts||[]).map(b=>b.symbol));
-  rows=[...rows.filter(c=>moveSet.has(c.symbol)), ...rows.filter(c=>!moveSet.has(c.symbol))];
+  const tier=c=>moveSet.has(c.symbol)?0:(allPositive(c)?1:2);
+  rows=[...rows.filter(c=>tier(c)===0), ...rows.filter(c=>tier(c)===1), ...rows.filter(c=>tier(c)===2)];
   document.getElementById('cnt-tech').textContent=rows.length;
-  const cols=[['symbol','Coin','txt'],['venue','Venue','txt'],['rsi14','RSI'],['rsi_ma','RSI ort.'],['rsi_cross_days_ago','Kesişim (g önce)'],['dist_lo7','dist_lo7'],['ret7d','7g %'],['consolidation_days','Konsol.(g)'],['mcap_usd','Mcap'],['max_magnitude','En büyük ×']];
+  const cols=[['symbol','Coin','txt'],['venue','Venue','txt'],['rsi14','RSI'],['rsi_ma','RSI ort.'],['rsi_cross_days_ago','Kesişim (g önce)'],['macd_hist','MACD hist'],['dist_lo7','dist_lo7'],['ret7d','7g %'],['mcap_usd','Mcap'],['max_magnitude','En büyük ×']];
   const t=document.getElementById('tbl-tech');
   t.innerHTML=thead(cols,'tech')+'<tbody>'+(rows.length?rows.map(c=>{
-    const dist=c._distLive??N(c.dist_lo7), rsi=N(c.rsi14), d=N(c.rsi_cross_days_ago);
-    const hit=moveSet.has(c.symbol);
-    return `<tr class="${hit?'movehit':''}">
-    <td>${symLink(c.symbol)}${cmcLink(c)}${hit?' <span class="movetag" title="Bu coin \'Hareket başladı\' sekmesinde de yanıyor">🚀 hareket başladı</span>':''}</td>
+    const dist=c._distLive??N(c.dist_lo7), rsi=N(c.rsi14), d=N(c.rsi_cross_days_ago), h=N(c.macd_hist);
+    const hit=moveSet.has(c.symbol), pos=!hit&&allPositive(c);
+    const tag = hit ? ' <span class="movetag" title="Bu coin \'Hareket başladı\' sekmesinde de yanıyor">🚀 hareket başladı</span>'
+              : pos ? ' <span class="postag" title="Tüm teknik sinyaller pozitif: RSI↑ + Golden Cross + MACD boğa">★ tüm sinyaller pozitif</span>' : '';
+    return `<tr class="${hit?'movehit':pos?'allpos':''}">
+    <td>${symLink(c.symbol)}${cmcLink(c)} ${techBadges(c)}${tag}</td>
     <td class="txt">${venues(c)}</td>
     <td class="${rsiClass(rsi)}"><b>${rsi!==null?fmtN(rsi,1):'—'}</b></td>
     <td>${c.rsi_ma!==null&&c.rsi_ma!==undefined?fmtN(N(c.rsi_ma),1):'—'}</td>
     <td>${d===0?'<span class="fire">bugün</span>':d+'g'}</td>
+    <td class="${cls(h)}">${h!==null?fmtN(h,4):'—'}</td>
     <td class="${cls(dist)}">${dist!==null?fmtN(dist,1)+'%':'—'}</td>
     <td class="${cls(N(c.ret7d))}">${fmtPct(N(c.ret7d))}</td>
-    <td>${c.consolidation_days??'—'}</td>
     <td>${fmtMcap(c.mcap_usd)}</td>
     <td>${c.max_magnitude?fmtN(c.max_magnitude,1)+'×':'—'}</td>
   </tr>`;}).join(''):emptyRow(cols.length))+'</tbody>';
@@ -520,7 +561,7 @@ window.addEventListener('hashchange',applyHash);
 applyHash();
 ['f_mag','f_phase','f_upbit','f_bybit','f_nonlisting'].forEach(id=>document.getElementById(id).addEventListener('input',renderPumps));
 ['s_cons','s_dist','s_mcap','s_phase'].forEach(id=>document.getElementById(id).addEventListener('input',renderSleep));
-['t_days','t_rsi','t_phase'].forEach(id=>document.getElementById(id).addEventListener('input',renderTech));
+['t_days','t_rsi','t_phase','t_allpos'].forEach(id=>document.getElementById(id).addEventListener('input',renderTech));
 document.getElementById('a_search').addEventListener('input',renderAll);
 document.getElementById('btnRefresh').onclick=startRefresh;
 document.getElementById('btnLive').onclick=loadLive;
