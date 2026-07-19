@@ -106,6 +106,7 @@
     <div class="tab active" data-tab="pumps">Eski pumplar <span class="badge" id="cnt-pumps">0</span></div>
     <div class="tab" data-tab="sleep">Uyuyan (watchlist) <span class="badge" id="cnt-sleep">0</span></div>
     <div class="tab" data-tab="move">Hareket başladı <span class="badge" id="cnt-move">0</span></div>
+    <div class="tab" data-tab="tech">Teknik Takip <span class="badge" id="cnt-tech">0</span></div>
     <div class="tab" data-tab="all">Tümü <span class="badge" id="cnt-all">0</span></div>
   </div>
 
@@ -150,7 +151,23 @@
     <div class="table-wrap"><table id="tbl-move"></table></div>
   </div>
 
-  <!-- D. Tümü -->
+  <!-- D. Teknik Takip -->
+  <div class="panel" id="panel-tech">
+    <div class="status-line" id="techHint">RSI(14) aşırı satımdayken (≤30) ortalamasını yukarı kesen coinler — son <b id="techMaxDays">2</b> gün içinde. Toparlanma başlangıcı sinyali.</div>
+    <div class="filters">
+      <label class="pill" title="Kesişimin en fazla kaç gün önce olabileceği. 0 = bugün.">kesişim ≤ gün <input type="number" id="t_days" value="2" step="1" min="0" style="width:70px"></label>
+      <label class="pill" title="RSI üst sınırı ($). Kesişim anındaki değil, güncel RSI'ya göre filtreler.">max RSI <input type="number" id="t_rsi" value="" placeholder="—" style="width:70px"></label>
+      <label class="pill">alpha aşaması
+        <select id="t_phase" style="width:auto">
+          <option value="">hepsi</option>
+          <option value="alpha">saf alpha (spot değil)</option>
+          <option value="spot">spot'a çıkmış</option>
+        </select></label>
+    </div>
+    <div class="table-wrap"><table id="tbl-tech"></table></div>
+  </div>
+
+  <!-- E. Tümü -->
   <div class="panel" id="panel-all">
     <div class="filters">
       <label class="pill">ara <input type="text" id="a_search" placeholder="symbol…" style="width:130px"></label>
@@ -172,7 +189,7 @@ const ADMIN = (()=>{ const p=new URLSearchParams(location.search).get('admin');
 if(ADMIN) document.body.classList.add('admin');
 let COINS = [];          // /coins
 let LIVE = { coins:{}, breakouts:[] };
-let sortState = { pumps:{col:'max_magnitude',dir:-1}, sleep:{col:'consolidation_days',dir:-1}, all:{col:'mcap_usd',dir:-1} };
+let sortState = { pumps:{col:'max_magnitude',dir:-1}, sleep:{col:'consolidation_days',dir:-1}, tech:{col:'rsi_cross_days_ago',dir:1}, all:{col:'mcap_usd',dir:-1} };
 
 // ── helpers ──
 const N = v => (v===null||v===undefined||v==='') ? null : Number(v);
@@ -269,7 +286,36 @@ function sortRows(rows,key,tab){
 function headerClick(tab,col){ const st=sortState[tab]; if(st.col===col)st.dir*=-1; else{st.col=col;st.dir=-1;} render(); }
 
 // ── renderers ──
-function render(){ renderPumps(); renderSleep(); renderMove(); renderAll(); }
+function render(){ renderPumps(); renderSleep(); renderMove(); renderTech(); renderAll(); }
+
+// RSI rengi: <=30 aşırı satım(yeşil) · >=70 aşırı alım(kırmızı) · arası nötr
+function rsiClass(v){ if(v===null)return 'muted'; if(v<=30)return 'pos'; if(v>=70)return 'neg'; return ''; }
+function renderTech(){
+  const maxDays=N(document.getElementById('t_days').value); const md=maxDays===null?2:maxDays;
+  document.getElementById('techMaxDays').textContent=md;
+  const maxRsi=N(document.getElementById('t_rsi').value);
+  let rows=COINS.filter(c=>{const d=N(c.rsi_cross_days_ago); return d!==null && d<=md;});
+  rows=rows.filter(c=>passPhase(c,document.getElementById('t_phase').value));
+  if(maxRsi!==null) rows=rows.filter(c=>N(c.rsi14)!==null && N(c.rsi14)<=maxRsi);
+  rows=sortRows(rows,'rsi_cross_days_ago','tech');
+  document.getElementById('cnt-tech').textContent=rows.length;
+  const cols=[['symbol','Coin','txt'],['venue','Venue','txt'],['rsi14','RSI'],['rsi_ma','RSI ort.'],['rsi_cross_days_ago','Kesişim (g önce)'],['dist_lo7','dist_lo7'],['ret7d','7g %'],['consolidation_days','Konsol.(g)'],['mcap_usd','Mcap'],['max_magnitude','En büyük ×']];
+  const t=document.getElementById('tbl-tech');
+  t.innerHTML=thead(cols,'tech')+'<tbody>'+(rows.length?rows.map(c=>{
+    const dist=c._distLive??N(c.dist_lo7), rsi=N(c.rsi14), d=N(c.rsi_cross_days_ago);
+    return `<tr>
+    <td>${symLink(c.symbol)}${cmcLink(c)}</td>
+    <td class="txt">${venues(c)}</td>
+    <td class="${rsiClass(rsi)}"><b>${rsi!==null?fmtN(rsi,1):'—'}</b></td>
+    <td>${c.rsi_ma!==null&&c.rsi_ma!==undefined?fmtN(N(c.rsi_ma),1):'—'}</td>
+    <td>${d===0?'<span class="fire">bugün</span>':d+'g'}</td>
+    <td class="${cls(dist)}">${dist!==null?fmtN(dist,1)+'%':'—'}</td>
+    <td class="${cls(N(c.ret7d))}">${fmtPct(N(c.ret7d))}</td>
+    <td>${c.consolidation_days??'—'}</td>
+    <td>${fmtMcap(c.mcap_usd)}</td>
+    <td>${c.max_magnitude?fmtN(c.max_magnitude,1)+'×':'—'}</td>
+  </tr>`;}).join(''):emptyRow(cols.length))+'</tbody>';
+}
 
 function renderAll(){
   const term=(document.getElementById('a_search').value||'').trim().toUpperCase();
@@ -448,8 +494,8 @@ const emptyRow=n=>`<tr><td colspan="${n}" class="empty">Kayıt yok</td></tr>`;
 
 // ── tabs & events ──
 // Sekme deep-link: #hareket / #uyuyan / #pumplar / #tumu (ve ham data-tab adları)
-const HASH_TO_TAB={hareket:'move',uyuyan:'sleep',pumplar:'pumps',eski:'pumps',tumu:'all',all:'all',move:'move',sleep:'sleep',pumps:'pumps'};
-const TAB_TO_HASH={move:'hareket',sleep:'uyuyan',pumps:'pumplar',all:'tumu'};
+const HASH_TO_TAB={hareket:'move',uyuyan:'sleep',pumplar:'pumps',eski:'pumps',teknik:'tech',tech:'tech',tumu:'all',all:'all',move:'move',sleep:'sleep',pumps:'pumps'};
+const TAB_TO_HASH={move:'hareket',sleep:'uyuyan',pumps:'pumplar',tech:'teknik',all:'tumu'};
 function activateTab(name){
   const tab=document.querySelector(`.tab[data-tab="${name}"]`); if(!tab) return;
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
@@ -466,6 +512,7 @@ window.addEventListener('hashchange',applyHash);
 applyHash();
 ['f_mag','f_phase','f_upbit','f_bybit','f_nonlisting'].forEach(id=>document.getElementById(id).addEventListener('input',renderPumps));
 ['s_cons','s_dist','s_mcap','s_phase'].forEach(id=>document.getElementById(id).addEventListener('input',renderSleep));
+['t_days','t_rsi','t_phase'].forEach(id=>document.getElementById(id).addEventListener('input',renderTech));
 document.getElementById('a_search').addEventListener('input',renderAll);
 document.getElementById('btnRefresh').onclick=startRefresh;
 document.getElementById('btnLive').onclick=loadLive;

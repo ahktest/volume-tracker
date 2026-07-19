@@ -5,6 +5,7 @@ const binance = require('../lib/binance');
 const refresh = require('../lib/refresh');
 const live = require('../lib/live');
 const cfg = require('../lib/config');
+const { computeRsi } = require('../lib/rsi');
 
 module.exports = (pool) => {
   const router = express.Router();
@@ -140,7 +141,13 @@ module.exports = (pool) => {
           alphaKlines = raw.map(k => ({ t: +k[0], c: +k[4] }));
         } catch (e) { /* alpha yoksa boş */ }
       }
-      res.json({ metrics, events, klines, alphaKlines });
+      // RSI(14) + ortalaması (grafik alt-paneli) — futures kapanışlarından, klines ile hizalı
+      let rsi = [], rsiMa = [];
+      if (klines.length) {
+        const r = computeRsi(klines.map(k => k.c));
+        rsi = r.rsi; rsiMa = r.ma;
+      }
+      res.json({ metrics, events, klines, alphaKlines, rsi, rsiMa });
     } catch (err) {
       console.error('[pump/coin] hata:', err);
       res.status(500).json({ error: err.message });
