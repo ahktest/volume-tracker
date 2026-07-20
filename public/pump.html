@@ -185,7 +185,8 @@
     <div class="filters">
       <span class="pill" style="gap:4px">zaman dilimi <span id="t_tfBtns" style="display:inline-flex;gap:4px"></span></span>
       <label class="pill" title="Kesişimin en fazla kaç BAR önce olabileceği. 0 = son bar.">kesişim ≤ <span id="t_barUnit">bar</span> <input type="number" id="t_days" value="2" step="1" min="0" style="width:70px"></label>
-      <label class="pill" title="RSI üst sınırı ($). Kesişim anındaki değil, güncel RSI'ya göre filtreler.">max RSI <input type="number" id="t_rsi" value="" placeholder="—" style="width:70px"></label>
+      <label class="pill" title="RSI alt sınırı. Güncel RSI bu değerin altındakiler gizlenir. Boş = sınırsız.">min RSI <input type="number" id="t_rsi_min" value="" placeholder="—" style="width:70px"></label>
+      <label class="pill" title="RSI üst sınırı. Güncel RSI bu değerin üstündekiler gizlenir. Boş = sınırsız.">max RSI <input type="number" id="t_rsi" value="" placeholder="—" style="width:70px"></label>
       <label class="pill">alpha aşaması
         <select id="t_phase" style="width:auto">
           <option value="">hepsi</option>
@@ -440,6 +441,7 @@ function renderTech(){
   const maxBars=N(document.getElementById('t_days').value);
   const mb=maxBars===null?meta.rsiCrossMaxBars:maxBars;
   document.getElementById('techMaxDays').textContent=mb;
+  const minRsi=N(document.getElementById('t_rsi_min').value);
   const maxRsi=N(document.getElementById('t_rsi').value);
   const onlyAll=document.getElementById('t_allpos').checked;
 
@@ -452,6 +454,7 @@ function renderTech(){
   else if(uni==='nonalpha') rows=rows.filter(r=>+r.is_alpha!==1);
   rows=rows.filter(r=>{const d=N(r.rsi_cross_bars_ago); return d!==null && d<=mb;});
   rows=rows.filter(r=>passPhase(r,document.getElementById('t_phase').value));
+  if(minRsi!==null) rows=rows.filter(r=>N(r.rsi14)!==null && N(r.rsi14)>=minRsi);
   if(maxRsi!==null) rows=rows.filter(r=>N(r.rsi14)!==null && N(r.rsi14)<=maxRsi);
   if(onlyAll) rows=rows.filter(r=>allPositive(r,meta));
   rows=sortRows(rows,'rsi_cross_bars_ago','tech');
@@ -719,7 +722,7 @@ window.addEventListener('hashchange',applyHash);
 applyHash();
 ['f_mag','f_phase','f_upbit','f_bybit','f_nonlisting'].forEach(id=>document.getElementById(id).addEventListener('input',renderPumps));
 ['s_cons','s_dist','s_mcap','s_phase'].forEach(id=>document.getElementById(id).addEventListener('input',renderSleep));
-['t_days','t_rsi','t_phase','t_allpos','t_universe'].forEach(id=>document.getElementById(id).addEventListener('input',renderTech));
+['t_days','t_rsi_min','t_rsi','t_phase','t_allpos','t_universe'].forEach(id=>document.getElementById(id).addEventListener('input',renderTech));
 ['a_search','a_universe'].forEach(id=>document.getElementById(id).addEventListener('input',renderAll));
 document.getElementById('btnRefresh').onclick=startRefresh;
 document.getElementById('btnTechRefresh').onclick=startTechRefresh;
