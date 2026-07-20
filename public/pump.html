@@ -179,13 +179,15 @@
           <option value="alpha">saf alpha (spot değil)</option>
           <option value="spot">spot'a çıkmış</option>
         </select></label>
-      <label class="pill" title="Teknik Takip evreni TÜM futures'tır. Varsayılan alpha evreniyle sınırlıdır; 'tümü' ile futures'ın tamamına aç.">evren
+      <label class="pill" title="Teknik Takip evreni TÜM TRADING futures'tır (~500). İstersen alpha evrenine daralt.">evren
         <select id="t_universe" style="width:auto">
-          <option value="alpha" selected>alpha evreni</option>
-          <option value="all">tümü (futures)</option>
+          <option value="all" selected>tümü (futures)</option>
+          <option value="alpha">alpha evreni</option>
           <option value="nonalpha">alpha dışı</option>
         </select></label>
       <label class="pill check" title="Sadece RSI↑ + Golden Cross + MACD boğa — üçü de pozitif olanlar"><input type="checkbox" id="t_allpos"> sadece hepsi pozitif</label>
+      <button class="btn btn-primary admin-only" id="btnTechRefresh" style="padding:6px 12px;font-size:12px" title="Tüm futures (~500) için teknik sinyalleri yeniden hesapla">↻ Teknik taramayı güncelle</button>
+      <span class="status-line" id="techProg" style="margin:0"></span>
     </div>
     <div class="table-wrap"><table id="tbl-tech"></table></div>
   </div>
@@ -194,7 +196,13 @@
   <div class="panel" id="panel-all">
     <div class="filters">
       <label class="pill">ara <input type="text" id="a_search" placeholder="symbol…" style="width:130px"></label>
-      <span class="status-line" style="margin:0">Evrendeki tüm coinler (alpha ∩ futures).</span>
+      <label class="pill" title="Varsayılan alpha ∩ futures (pump evreni, tam veri). 'tümü' teknik taramanın futures evrenini de gösterir — alpha dışı coinlerde pump/konsolidasyon alanları boştur.">evren
+        <select id="a_universe" style="width:auto">
+          <option value="alpha" selected>alpha evreni</option>
+          <option value="all">tümü (futures)</option>
+          <option value="nonalpha">alpha dışı</option>
+        </select></label>
+      <span class="status-line" id="allHint" style="margin:0">Alpha ∩ futures evreni.</span>
     </div>
     <div class="table-wrap"><table id="tbl-all"></table></div>
   </div>
@@ -321,6 +329,27 @@ async function pollStatus(){
   if(s.running){ setTimeout(pollStatus,1500); }
   else{ document.getElementById('btnRefresh').disabled=false; await loadCoins(); setTimeout(()=>document.getElementById('progWrap').classList.remove('show'),4000); }
 }
+// ── Teknik tarama job'u (TÜM futures, pump refresh'ten ayrı) ──
+async function startTechRefresh(){
+  const btn=document.getElementById('btnTechRefresh'); btn.disabled=true;
+  try{
+    const r=await fetch(`${API}/tech-refresh`,{method:'POST'}); const j=await r.json();
+    if(!j.started) document.getElementById('techProg').textContent='zaten çalışıyor…';
+    pollTechStatus();
+  }catch(e){ alert('Teknik tarama hatası: '+e.message); btn.disabled=false; }
+}
+async function pollTechStatus(){
+  let s; try{ const r=await fetch(`${API}/tech-refresh/status`); s=await r.json(); }catch(e){ return; }
+  const el=document.getElementById('techProg');
+  if(s.total) el.textContent=`teknik tarama ${s.done}/${s.total} • ok:${s.ok} hata:${s.failed}`
+    +(s.current?` • ${s.current}`:'')+(s.running?'':' • ✓ bitti');
+  if(s.running){ setTimeout(pollTechStatus,2000); }
+  else{
+    document.getElementById('btnTechRefresh').disabled=false;
+    if(s.total){ await loadTech(); setTimeout(()=>{ el.textContent=''; },6000); }
+  }
+}
+
 async function refreshOne(sym,btn){
   btn.disabled=true; btn.textContent='…';
   try{ await fetch(`${API}/refresh/${sym}`,{method:'POST'}); await loadCoins(); }
@@ -434,9 +463,24 @@ function renderTech(){
   </tr>`;}).join(''):emptyRow(cols.length))+'</tbody>';
 }
 
+// "Tümü" sekmesi kaynağı: alpha → COINS (tam veri); tümü/alpha-dışı → teknik evren (/tech),
+// alpha coinlerde COINS satırı üste bindirilir (event_count vb. zengin alanlar için).
+function allSourceRows(uni){
+  if(uni==='alpha') return COINS.slice();
+  const tf=TECH['1d']||{};
+  const cmap=new Map(COINS.map(c=>[c.symbol,c]));
+  let rows=Object.values(tf).map(t=>{ const c=cmap.get(t.symbol); return c?{...t,...c}:t; });
+  if(uni==='nonalpha') rows=rows.filter(r=>+r.is_alpha!==1);
+  return rows;
+}
 function renderAll(){
   const term=(document.getElementById('a_search').value||'').trim().toUpperCase();
-  let rows=COINS.slice();
+  const uni=document.getElementById('a_universe').value;
+  document.getElementById('allHint').textContent =
+    uni==='alpha' ? 'Alpha ∩ futures evreni.'
+    : uni==='nonalpha' ? 'Alpha dışı futures — pump/konsolidasyon alanları boş.'
+    : 'Tüm TRADING futures (teknik evren).';
+  let rows=allSourceRows(uni);
   if(term) rows=rows.filter(c=>c.symbol.includes(term));
   rows=sortRows(rows,'mcap_usd','all');
   document.getElementById('cnt-all').textContent=rows.length;
@@ -630,12 +674,13 @@ applyHash();
 ['f_mag','f_phase','f_upbit','f_bybit','f_nonlisting'].forEach(id=>document.getElementById(id).addEventListener('input',renderPumps));
 ['s_cons','s_dist','s_mcap','s_phase'].forEach(id=>document.getElementById(id).addEventListener('input',renderSleep));
 ['t_days','t_rsi','t_phase','t_allpos','t_universe'].forEach(id=>document.getElementById(id).addEventListener('input',renderTech));
-document.getElementById('a_search').addEventListener('input',renderAll);
+['a_search','a_universe'].forEach(id=>document.getElementById(id).addEventListener('input',renderAll));
 document.getElementById('btnRefresh').onclick=startRefresh;
+document.getElementById('btnTechRefresh').onclick=startTechRefresh;
 document.getElementById('btnLive').onclick=loadLive;
 
 // ── init ──
-(async()=>{ await loadCoins(); await loadTech(); if(ADMIN) pollStatus(); loadLive(); })();
+(async()=>{ await loadCoins(); await loadTech(); if(ADMIN){ pollStatus(); pollTechStatus(); } loadLive(); })();
 </script>
 </body>
 </html>

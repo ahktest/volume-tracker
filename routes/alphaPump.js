@@ -83,13 +83,14 @@ module.exports = (pool) => {
         SELECT t.symbol, t.timeframe, t.rsi14, t.rsi_ma, t.rsi_cross_bars_ago,
                t.ma50, t.ma200, t.ma_cross_bars_ago, t.ma_source,
                t.macd, t.macd_signal, t.macd_hist, t.macd_cross_bars_ago, t.updated_at,
-               cm.dist_lo7, cm.ret7d, cm.consolidation_days, cm.last_price, cm.is_sleeping,
+               cm.dist_lo7, cm.ret7d, cm.ret30d, cm.consolidation_days, cm.last_price,
+               cm.is_sleeping, cm.fut_ath_age_days,
                (cm.symbol IS NOT NULL) AS in_metrics,
                bft.mcap_usd, bft.cmc_slug,
                COALESCE(ec.is_alpha,0) AS is_alpha, COALESCE(ec.is_fut,0) AS is_fut,
                COALESCE(ec.is_spot,0)  AS is_spot,  COALESCE(ec.is_upbit,0) AS is_upbit,
                COALESCE(ec.is_bybit,0) AS is_bybit,
-               pe.max_magnitude
+               pe.max_magnitude, COALESCE(pe.event_count, 0) AS event_count
           FROM coin_tech_signals t
           LEFT JOIN coin_metrics cm ON cm.symbol = t.symbol
           LEFT JOIN (
@@ -104,7 +105,8 @@ module.exports = (pool) => {
             FROM exchangecoins GROUP BY symbol
           ) ec ON ec.symbol = t.symbol
           LEFT JOIN (
-            SELECT symbol, MAX(magnitude_x) AS max_magnitude FROM pump_events GROUP BY symbol
+            SELECT symbol, MAX(magnitude_x) AS max_magnitude, COUNT(*) AS event_count
+            FROM pump_events GROUP BY symbol
           ) pe ON pe.symbol = t.symbol
       `);
       res.json({
@@ -173,6 +175,19 @@ module.exports = (pool) => {
 
   // ── GET /refresh/status : progress bar ──
   router.get('/refresh/status', (req, res) => res.json(refresh.status()));
+
+  // ── POST /tech-refresh : Teknik Takip taraması (TÜM TRADING futures, ~500) ──
+  // Pump refresh'ten ayrıdır; o alpha∩futures (222) evreninde çalışır.
+  router.post('/tech-refresh', (req, res) => {
+    try { res.json(require('../lib/techScan').start(pool)); }
+    catch (err) {
+      console.error('[pump/tech-refresh] hata:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── GET /tech-refresh/status : teknik tarama ilerlemesi ──
+  router.get('/tech-refresh/status', (req, res) => res.json(require('../lib/techScan').status()));
 
   // ── POST /refresh/:symbol : tek coin yeniden hesapla ──
   router.post('/refresh/:symbol', async (req, res) => {
