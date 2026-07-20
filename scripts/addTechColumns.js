@@ -22,11 +22,35 @@ const COLS = [
   ['macd_cross_days_ago','INT NULL'],
 ];
 
+// Çoklu zaman dilimi (1d/4h/1w) teknik sinyal tablosu
+const CREATE_TECH_SIGNALS = `
+CREATE TABLE IF NOT EXISTS coin_tech_signals (
+  symbol              VARCHAR(40)   NOT NULL,
+  timeframe           VARCHAR(8)    NOT NULL,
+  rsi14               DECIMAL(6,2)  NULL,
+  rsi_ma              DECIMAL(6,2)  NULL,
+  rsi_cross_bars_ago  INT           NULL,
+  ma50                DECIMAL(38,18) NULL,
+  ma200               DECIMAL(38,18) NULL,
+  ma_cross_bars_ago   INT           NULL,
+  macd                DECIMAL(38,18) NULL,
+  macd_signal         DECIMAL(38,18) NULL,
+  macd_hist           DECIMAL(38,18) NULL,
+  macd_cross_bars_ago INT           NULL,
+  updated_at          DATETIME      NULL,
+  PRIMARY KEY (symbol, timeframe),
+  KEY idx_tf_rsi_cross (timeframe, rsi_cross_bars_ago)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci`;
+
 (async () => {
   const pool = mysql.createPool({
     host: process.env.DB_HOST, user: process.env.DB_USER,
     password: process.env.DB_PASS, database: process.env.DB_NAME,
   });
+  try {
+    await pool.query(CREATE_TECH_SIGNALS);
+    console.log('✓ tablo hazır: coin_tech_signals');
+  } catch (e) { console.error('✗ coin_tech_signals:', e.message); }
   for (const [name, def] of COLS) {
     try {
       await pool.query(`ALTER TABLE coin_metrics ADD COLUMN \`${name}\` ${def}`);

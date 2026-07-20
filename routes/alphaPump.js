@@ -73,6 +73,30 @@ module.exports = (pool) => {
     }
   });
 
+  // ── GET /tech : çoklu zaman dilimi teknik sinyalleri (1d/4h/1w) + eşik meta'sı ──
+  // Tüm dilimler tek çağrıda döner; frontend seçiciyi client-side değiştirir.
+  router.get('/tech', async (req, res) => {
+    try {
+      const [rows] = await pool.query(
+        `SELECT symbol, timeframe, rsi14, rsi_ma, rsi_cross_bars_ago,
+                ma50, ma200, ma_cross_bars_ago, macd, macd_signal, macd_hist,
+                macd_cross_bars_ago, updated_at
+           FROM coin_tech_signals`
+      );
+      res.json({
+        meta: {
+          timeframes: cfg.TIMEFRAMES,
+          default: cfg.DEFAULT_TIMEFRAME,
+          rsi_oversold: cfg.RSI_OVERSOLD,
+        },
+        rows,
+      });
+    } catch (err) {
+      console.error('[pump/tech] hata:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ── GET /live : ucuz batch ticker + funding + breakout (lib/live) ──
   router.get('/live', async (req, res) => {
     try {

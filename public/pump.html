@@ -74,6 +74,10 @@
     tr.allpos:hover td{background:#f59e0b22}
     .postag{background:#f59e0b33;color:#fbbf24;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;white-space:nowrap}
     /* kontrol edilen teknik araç rozetleri (coin yanı) */
+    /* zaman dilimi seçici (1d / 4h / 1w) */
+    .tfbtn{background:#1f2937;color:#9ca3af;border:1px solid #374151;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;font-weight:600}
+    .tfbtn:hover{background:#374151;color:#e5e7eb}
+    .tfbtn.active{background:#2563eb;border-color:#2563eb;color:#fff}
     .sig{display:inline-block;font-size:9px;font-weight:700;border-radius:4px;padding:1px 5px;margin-left:3px;vertical-align:middle}
     .sig.pos{background:#05966933;color:#6ee7b7}.sig.neg{background:#dc262633;color:#fca5a5}.sig.muted{background:#37415133;color:#9ca3af}
     .empty{padding:40px;text-align:center;color:#6b7280}
@@ -164,9 +168,10 @@
 
   <!-- D. Teknik Takip -->
   <div class="panel" id="panel-tech">
-    <div class="status-line" id="techHint">RSI(14) ortalamasını yukarı keserken 30'un üzerindeyken (aşırı satımdan çıkış) — son <b id="techMaxDays">2</b> gün içinde kesişenler. Toparlanma başlangıcı sinyali.</div>
+    <div class="status-line" id="techHint">RSI(14) ortalamasını yukarı keserken alt tabanın üzerindeyken — son <b id="techMaxDays">2</b> bar içinde kesişenler. Toparlanma başlangıcı sinyali.</div>
     <div class="filters">
-      <label class="pill" title="Kesişimin en fazla kaç gün önce olabileceği. 0 = bugün.">kesişim ≤ gün <input type="number" id="t_days" value="2" step="1" min="0" style="width:70px"></label>
+      <span class="pill" style="gap:4px">zaman dilimi <span id="t_tfBtns" style="display:inline-flex;gap:4px"></span></span>
+      <label class="pill" title="Kesişimin en fazla kaç BAR önce olabileceği. 0 = son bar.">kesişim ≤ <span id="t_barUnit">bar</span> <input type="number" id="t_days" value="2" step="1" min="0" style="width:70px"></label>
       <label class="pill" title="RSI üst sınırı ($). Kesişim anındaki değil, güncel RSI'ya göre filtreler.">max RSI <input type="number" id="t_rsi" value="" placeholder="—" style="width:70px"></label>
       <label class="pill">alpha aşaması
         <select id="t_phase" style="width:auto">
@@ -201,7 +206,10 @@ const ADMIN = (()=>{ const p=new URLSearchParams(location.search).get('admin');
 if(ADMIN) document.body.classList.add('admin');
 let COINS = [];          // /coins
 let LIVE = { coins:{}, breakouts:[] };
-let sortState = { pumps:{col:'max_magnitude',dir:-1}, sleep:{col:'consolidation_days',dir:-1}, tech:{col:'rsi_cross_days_ago',dir:1}, all:{col:'mcap_usd',dir:-1} };
+let TECH = {};           // /tech → TECH[timeframe][symbol] = sinyal satırı
+let TF_META = {};        // zaman dilimi eşikleri (sunucudan; frontend'de sabit tutmuyoruz)
+let curTF = '1d';        // seçili zaman dilimi
+let sortState = { pumps:{col:'max_magnitude',dir:-1}, sleep:{col:'consolidation_days',dir:-1}, tech:{col:'rsi_cross_bars_ago',dir:1}, all:{col:'mcap_usd',dir:-1} };
 
 // ── helpers ──
 const N = v => (v===null||v===undefined||v==='') ? null : Number(v);
@@ -251,6 +259,34 @@ async function loadCoins(){
   document.getElementById('statusLine').textContent =
     `${COINS.length} coin • uyuyan: ${COINS.filter(c=>+c.is_sleeping).length} • pumplı: ${COINS.filter(c=>+c.event_count>0).length}`;
 }
+// Çoklu zaman dilimi teknik sinyalleri — tek çağrı, seçici client-side geçiş yapar
+async function loadTech(){
+  try{
+    const r = await fetch(`${API}/tech`); const j = await r.json();
+    TF_META = (j.meta && j.meta.timeframes) || {};
+    if(j.meta && j.meta.default && TF_META[j.meta.default]) curTF = j.meta.default;
+    TECH = {};
+    for(const row of (j.rows||[])){ (TECH[row.timeframe] = TECH[row.timeframe] || {})[row.symbol] = row; }
+    renderTFButtons();
+    syncTFInputs();
+    render();
+  }catch(e){ console.error('tech yüklenemedi:', e.message); }
+}
+function renderTFButtons(){
+  const el=document.getElementById('t_tfBtns');
+  const keys=Object.keys(TF_META);
+  if(!keys.length){ el.innerHTML='<span class="muted">—</span>'; return; }
+  el.innerHTML=keys.map(k=>`<button class="tfbtn ${k===curTF?'active':''}" data-tf="${k}">${TF_META[k].label||k}</button>`).join('');
+  el.querySelectorAll('.tfbtn').forEach(b=>b.onclick=()=>{ curTF=b.dataset.tf; renderTFButtons(); syncTFInputs(); renderTech(); });
+}
+// Zaman dilimi değişince "kesişim ≤ bar" varsayılanını ve birim etiketini güncelle
+function syncTFInputs(){
+  const m=TF_META[curTF]; if(!m) return;
+  document.getElementById('t_days').value = m.rsiCrossMaxBars;
+  const unit = curTF==='1d' ? 'gün' : curTF==='1w' ? 'hafta' : 'bar (4s)';
+  document.getElementById('t_barUnit').textContent = unit;
+}
+
 async function loadLive(){
   const btn = document.getElementById('btnLive'); btn.disabled = true; btn.textContent='Tazeleniyor…';
   try{
@@ -304,27 +340,29 @@ function render(){ renderPumps(); renderSleep(); renderMove(); renderTech(); ren
 function rsiClass(v){ if(v===null)return 'muted'; if(v<=30)return 'pos'; if(v>=70)return 'neg'; return ''; }
 
 // ── teknik sinyal durumları (coin_metrics kolonlarından türetilir) ──
-const cfgMaRecent=2; // MA_CROSS_RECENT_DAYS ile aynı — golden/death cross bu kadar gün içindeyse pozitif
+// ── teknik sinyal durumları — seçili zaman diliminin coin_tech_signals satırından ──
 // RSI: sekme filtresi zaten "yukarı kesiş" gerektirir -> pozitif.
-const rsiPos = c => N(c.rsi_cross_days_ago)!==null;
-// Golden/Death: {gd:+1 golden/-1 death, recent:kesişim<=2g, days}. null=yetersiz geçmiş (200g yok).
-function maState(c){ const f=N(c.ma50),s=N(c.ma200); if(f===null||s===null) return null;
-  const days=N(c.ma_cross_days_ago); return { gd:f>s?1:-1, recent:days!==null&&days<=cfgMaRecent, days }; }
-// MA pozitif = golden VE kesişim son 2 gün içinde
-const maPos = c => { const m=maState(c); return m!==null && m.gd===1 && m.recent; };
+const rsiPos = t => N(t.rsi_cross_bars_ago)!==null;
+// Golden/Death: {gd:+1 golden/-1 death, recent:kesişim<=eşik bar, bars}. null=yetersiz geçmiş (200 bar yok).
+function maState(t,meta){ const f=N(t.ma50),s=N(t.ma200); if(f===null||s===null) return null;
+  const bars=N(t.ma_cross_bars_ago);
+  return { gd:f>s?1:-1, recent:bars!==null&&bars<=meta.maCrossRecentBars, bars }; }
+// MA pozitif = golden VE kesişim eşik bar içinde
+const maPos = (t,meta) => { const m=maState(t,meta); return m!==null && m.gd===1 && m.recent; };
 // MACD pozitif: macd çizgisi 0'ın üzerinde. null=yetersiz geçmiş.
-function macdState(c){ const v=N(c.macd); if(v===null) return null; return v>0?1:-1; }
-// Hepsi pozitif: RSI↑ + taze golden cross(≤2g) + MACD>0
-const allPositive = c => rsiPos(c) && maPos(c) && macdState(c)===1;
+function macdState(t){ const v=N(t.macd); if(v===null) return null; return v>0?1:-1; }
+// Hepsi pozitif: RSI↑ + taze golden cross + MACD>0
+const allPositive = (t,meta) => rsiPos(t) && maPos(t,meta) && macdState(t)===1;
 
 // kontrol edilen araç rozetleri (coin yanı)
-function techBadges(c){
-  const m=maState(c);
+function techBadges(t,meta){
+  const u = curTF==='1d' ? 'g' : curTF==='1w' ? 'hf' : 'bar';
+  const m=maState(t,meta);
   let maB;
-  if(m===null) maB='<span class="sig muted" title="MA200 için yetersiz geçmiş (200g yok)">MA?</span>';
-  else if(m.gd===1) maB=`<span class="sig ${m.recent?'pos':'muted'}" title="Golden: MA50 > MA200${m.days!==null?` — ${m.days}g önce kesti`:''}${m.recent?'':` (kesişim ${cfgMaRecent}g'den eski, pozitif sayılmaz)`}">GC</span>`;
-  else maB=`<span class="sig ${m.recent?'neg':'muted'}" title="Death: MA50 < MA200${m.days!==null?` — ${m.days}g önce kesti`:''}">DC</span>`;
-  const mc=macdState(c);
+  if(m===null) maB='<span class="sig muted" title="MA200 için yetersiz geçmiş (200 bar yok)">MA?</span>';
+  else if(m.gd===1) maB=`<span class="sig ${m.recent?'pos':'muted'}" title="Golden: MA50 > MA200${m.bars!==null?` — ${m.bars}${u} önce kesti`:''}${m.recent?'':` (kesişim ${meta.maCrossRecentBars}${u}'den eski, pozitif sayılmaz)`}">GC</span>`;
+  else maB=`<span class="sig ${m.recent?'neg':'muted'}" title="Death: MA50 < MA200${m.bars!==null?` — ${m.bars}${u} önce kesti`:''}">DC</span>`;
+  const mc=macdState(t);
   let mcB;
   if(mc===null) mcB='<span class="sig muted" title="MACD için yetersiz geçmiş">MACD?</span>';
   else if(mc===1) mcB='<span class="sig pos" title="MACD 0 üzerinde (pozitif)">MACD↑</span>';
@@ -333,38 +371,46 @@ function techBadges(c){
 }
 
 function renderTech(){
-  const maxDays=N(document.getElementById('t_days').value); const md=maxDays===null?2:maxDays;
-  document.getElementById('techMaxDays').textContent=md;
+  const meta=TF_META[curTF];
+  const t=document.getElementById('tbl-tech');
+  if(!meta){ document.getElementById('cnt-tech').textContent=0; t.innerHTML='<tbody>'+emptyRow(1)+'</tbody>'; return; }
+  const unit = curTF==='1d' ? 'g' : curTF==='1w' ? 'hf' : 'bar';
+  const maxBars=N(document.getElementById('t_days').value);
+  const mb=maxBars===null?meta.rsiCrossMaxBars:maxBars;
+  document.getElementById('techMaxDays').textContent=mb;
   const maxRsi=N(document.getElementById('t_rsi').value);
   const onlyAll=document.getElementById('t_allpos').checked;
-  let rows=COINS.filter(c=>{const d=N(c.rsi_cross_days_ago); return d!==null && d<=md;});
-  rows=rows.filter(c=>passPhase(c,document.getElementById('t_phase').value));
-  if(maxRsi!==null) rows=rows.filter(c=>N(c.rsi14)!==null && N(c.rsi14)<=maxRsi);
-  if(onlyAll) rows=rows.filter(allPositive);
-  rows=sortRows(rows,'rsi_cross_days_ago','tech');
+
+  // COINS (görsel alanlar) + seçili dilimin teknik satırı birleştirilir
+  const tfMap=TECH[curTF]||{};
+  let rows=COINS.map(c=>{ const s=tfMap[c.symbol]; return s?{...c,...s}:null; }).filter(Boolean);
+  rows=rows.filter(r=>{const d=N(r.rsi_cross_bars_ago); return d!==null && d<=mb;});
+  rows=rows.filter(r=>passPhase(r,document.getElementById('t_phase').value));
+  if(maxRsi!==null) rows=rows.filter(r=>N(r.rsi14)!==null && N(r.rsi14)<=maxRsi);
+  if(onlyAll) rows=rows.filter(r=>allPositive(r,meta));
+  rows=sortRows(rows,'rsi_cross_bars_ago','tech');
   // Kademeli sabitleme: 1) Hareket başladı  2) hepsi pozitif  3) diğerleri (grup içi sıra korunur)
   const moveSet=new Set((LIVE.breakouts||[]).map(b=>b.symbol));
-  const tier=c=>moveSet.has(c.symbol)?0:(allPositive(c)?1:2);
-  rows=[...rows.filter(c=>tier(c)===0), ...rows.filter(c=>tier(c)===1), ...rows.filter(c=>tier(c)===2)];
+  const tier=r=>moveSet.has(r.symbol)?0:(allPositive(r,meta)?1:2);
+  rows=[...rows.filter(r=>tier(r)===0), ...rows.filter(r=>tier(r)===1), ...rows.filter(r=>tier(r)===2)];
   document.getElementById('cnt-tech').textContent=rows.length;
-  const cols=[['symbol','Coin','txt'],['venue','Venue','txt'],['rsi14','RSI'],['rsi_ma','RSI ort.'],['rsi_cross_days_ago','Kesişim (g önce)'],['macd_hist','MACD hist'],['dist_lo7','dist_lo7'],['ret7d','7g %'],['mcap_usd','Mcap'],['max_magnitude','En büyük ×']];
-  const t=document.getElementById('tbl-tech');
-  t.innerHTML=thead(cols,'tech')+'<tbody>'+(rows.length?rows.map(c=>{
-    const dist=c._distLive??N(c.dist_lo7), rsi=N(c.rsi14), d=N(c.rsi_cross_days_ago), h=N(c.macd_hist);
-    const hit=moveSet.has(c.symbol), pos=!hit&&allPositive(c);
+  const cols=[['symbol','Coin','txt'],['venue','Venue','txt'],['rsi14','RSI'],['rsi_ma','RSI ort.'],['rsi_cross_bars_ago',`Kesişim (${unit} önce)`],['macd_hist','MACD hist'],['dist_lo7','dist_lo7'],['ret7d','7g %'],['mcap_usd','Mcap'],['max_magnitude','En büyük ×']];
+  t.innerHTML=thead(cols,'tech')+'<tbody>'+(rows.length?rows.map(r=>{
+    const dist=r._distLive??N(r.dist_lo7), rsi=N(r.rsi14), d=N(r.rsi_cross_bars_ago), h=N(r.macd_hist);
+    const hit=moveSet.has(r.symbol), pos=!hit&&allPositive(r,meta);
     const tag = hit ? ' <span class="movetag" title="Bu coin \'Hareket başladı\' sekmesinde de yanıyor">🚀 hareket başladı</span>'
               : pos ? ' <span class="postag" title="Tüm teknik sinyaller pozitif: RSI↑ + Golden Cross + MACD boğa">★ tüm sinyaller pozitif</span>' : '';
     return `<tr class="${hit?'movehit':pos?'allpos':''}">
-    <td>${symLink(c.symbol)}${cmcLink(c)} ${techBadges(c)}${tag}</td>
-    <td class="txt">${venues(c)}</td>
+    <td>${symLink(r.symbol)}${cmcLink(r)} ${techBadges(r,meta)}${tag}</td>
+    <td class="txt">${venues(r)}</td>
     <td class="${rsiClass(rsi)}"><b>${rsi!==null?fmtN(rsi,1):'—'}</b></td>
-    <td>${c.rsi_ma!==null&&c.rsi_ma!==undefined?fmtN(N(c.rsi_ma),1):'—'}</td>
-    <td>${d===0?'<span class="fire">bugün</span>':d+'g'}</td>
+    <td>${r.rsi_ma!==null&&r.rsi_ma!==undefined?fmtN(N(r.rsi_ma),1):'—'}</td>
+    <td>${d===0?`<span class="fire">${curTF==='1d'?'bugün':'son bar'}</span>`:d+unit}</td>
     <td class="${cls(h)}">${h!==null?fmtN(h,4):'—'}</td>
     <td class="${cls(dist)}">${dist!==null?fmtN(dist,1)+'%':'—'}</td>
-    <td class="${cls(N(c.ret7d))}">${fmtPct(N(c.ret7d))}</td>
-    <td>${fmtMcap(c.mcap_usd)}</td>
-    <td>${c.max_magnitude?fmtN(c.max_magnitude,1)+'×':'—'}</td>
+    <td class="${cls(N(r.ret7d))}">${fmtPct(N(r.ret7d))}</td>
+    <td>${fmtMcap(r.mcap_usd)}</td>
+    <td>${r.max_magnitude?fmtN(r.max_magnitude,1)+'×':'—'}</td>
   </tr>`;}).join(''):emptyRow(cols.length))+'</tbody>';
 }
 
@@ -569,7 +615,7 @@ document.getElementById('btnRefresh').onclick=startRefresh;
 document.getElementById('btnLive').onclick=loadLive;
 
 // ── init ──
-(async()=>{ await loadCoins(); if(ADMIN) pollStatus(); loadLive(); })();
+(async()=>{ await loadCoins(); await loadTech(); if(ADMIN) pollStatus(); loadLive(); })();
 </script>
 </body>
 </html>
