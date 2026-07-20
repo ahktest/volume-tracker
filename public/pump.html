@@ -73,6 +73,19 @@
     tr.allpos td{background:#f59e0b14}
     tr.allpos:hover td{background:#f59e0b22}
     .postag{background:#f59e0b33;color:#fbbf24;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;white-space:nowrap}
+    /* 2'li pozitif (RSI + GC ya da RSI + MACD) */
+    tr.duopos td{background:#2563eb12}
+    tr.duopos:hover td{background:#2563eb1f}
+    .duotag{background:#2563eb33;color:#93c5fd;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;white-space:nowrap}
+    /* tablo içi grup başlığı + "daha fazla yükle" satırı */
+    tr.grouprow td{background:#0f172a;color:#94a3b8;font-size:11px;font-weight:700;letter-spacing:.4px;
+                   text-transform:uppercase;padding:7px 11px;border-top:1px solid #1f2937}
+    tr.grouprow:hover td{background:#0f172a}
+    tr.morerow td{text-align:center;padding:0;background:transparent}
+    tr.morerow:hover td{background:transparent}
+    .morebtn{width:100%;background:#111827;color:#93c5fd;border:1px dashed #374151;border-radius:8px;
+             padding:9px 14px;font-size:12px;font-weight:600;cursor:pointer}
+    .morebtn:hover{background:#1f2937;color:#bfdbfe}
     /* kontrol edilen teknik araç rozetleri (coin yanı) */
     /* zaman dilimi seçici (1d / 4h / 1w) */
     .tfbtn{background:#1f2937;color:#9ca3af;border:1px solid #374151;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;font-weight:600}
@@ -415,6 +428,10 @@ function techBadges(t,meta){
   return `<span class="sig pos" title="RSI aşırı satımdan yukarı kesiş">RSI↑</span>${maB}${mcB}`;
 }
 
+// "Daha fazla yükle" durumu — sadece-RSI grubu açık mı
+let techShowRest=false;
+function techLoadMore(){ techShowRest=true; renderTech(); }
+
 function renderTech(){
   const meta=TF_META[curTF];
   const t=document.getElementById('tbl-tech');
@@ -438,18 +455,36 @@ function renderTech(){
   if(maxRsi!==null) rows=rows.filter(r=>N(r.rsi14)!==null && N(r.rsi14)<=maxRsi);
   if(onlyAll) rows=rows.filter(r=>allPositive(r,meta));
   rows=sortRows(rows,'rsi_cross_bars_ago','tech');
-  // Kademeli sabitleme: 1) Hareket başladı  2) hepsi pozitif  3) diğerleri (grup içi sıra korunur)
+
+  // ── Kademeli sıralama ──
+  //  0) Hareket başladı (RSI zaten pozitif, sekme filtresi garanti ediyor)
+  //  1) Tam pozitif   : RSI + Golden Cross + MACD
+  //  2) 2'li pozitif  : RSI + (GC ya da MACD)
+  //  3) Geri kalan    : sadece RSI — "daha fazla yükle" altında, RSI'ya göre sıralı
   const moveSet=new Set((LIVE.breakouts||[]).map(b=>b.symbol));
-  const tier=r=>moveSet.has(r.symbol)?0:(allPositive(r,meta)?1:2);
-  rows=[...rows.filter(r=>tier(r)===0), ...rows.filter(r=>tier(r)===1), ...rows.filter(r=>tier(r)===2)];
+  const tierOf=r=>{
+    if(moveSet.has(r.symbol)) return 0;
+    const g=maPos(r,meta), m=macdState(r)===1;
+    return (g&&m) ? 1 : (g||m) ? 2 : 3;
+  };
+  const g0=rows.filter(r=>tierOf(r)===0), g1=rows.filter(r=>tierOf(r)===1),
+        g2=rows.filter(r=>tierOf(r)===2);
+  // geri kalanlar RSI durumuna göre (düşük RSI = daha aşırı satım, önce)
+  const g3=rows.filter(r=>tierOf(r)===3)
+    .sort((a,b)=>{const x=N(a.rsi14),y=N(b.rsi14); if(x===null)return 1; if(y===null)return -1; return x-y;});
   document.getElementById('cnt-tech').textContent=rows.length;
+
   const cols=[['symbol','Coin','txt'],['venue','Venue','txt'],['rsi14','RSI'],['rsi_ma','RSI ort.'],['rsi_cross_bars_ago',`Kesişim (${unit} önce)`],['macd_hist','MACD hist'],['dist_lo7','dist_lo7'],['ret7d','7g %'],['mcap_usd','Mcap'],['max_magnitude','En büyük ×']];
-  t.innerHTML=thead(cols,'tech')+'<tbody>'+(rows.length?rows.map(r=>{
+  const NC=cols.length;
+
+  const rowHtml=(r,tier)=>{
     const dist=N(r.dist_lo7), rsi=N(r.rsi14), d=N(r.rsi_cross_bars_ago), h=N(r.macd_hist);
-    const hit=moveSet.has(r.symbol), pos=!hit&&allPositive(r,meta);
-    const tag = hit ? ' <span class="movetag" title="Bu coin \'Hareket başladı\' sekmesinde de yanıyor">🚀 hareket başladı</span>'
-              : pos ? ' <span class="postag" title="Tüm teknik sinyaller pozitif: RSI↑ + Golden Cross + MACD boğa">★ tüm sinyaller pozitif</span>' : '';
-    return `<tr class="${hit?'movehit':pos?'allpos':''}">
+    const which = maPos(r,meta) ? 'RSI + Golden Cross' : 'RSI + MACD';
+    const tag = tier===0 ? ' <span class="movetag" title="Bu coin \'Hareket başladı\' sekmesinde de yanıyor">🚀 hareket başladı</span>'
+              : tier===1 ? ' <span class="postag" title="Tüm teknik sinyaller pozitif: RSI↑ + Golden Cross + MACD boğa">★ tam pozitif</span>'
+              : tier===2 ? ` <span class="duotag" title="İki sinyal pozitif: ${which}">◆ ${which}</span>` : '';
+    const cl = tier===0?'movehit':tier===1?'allpos':tier===2?'duopos':'';
+    return `<tr class="${cl}">
     <td>${symLink(r.symbol)}${cmcLink(r)} ${techBadges(r,meta)}${tag}</td>
     <td class="txt">${venues(r)}</td>
     <td class="${rsiClass(rsi)}"><b>${rsi!==null?fmtN(rsi,1):'—'}</b></td>
@@ -460,7 +495,18 @@ function renderTech(){
     <td class="${cls(N(r.ret7d))}">${fmtPct(N(r.ret7d))}</td>
     <td>${fmtMcap(r.mcap_usd)}</td>
     <td>${r.max_magnitude?fmtN(r.max_magnitude,1)+'×':'—'}</td>
-  </tr>`;}).join(''):emptyRow(cols.length))+'</tbody>';
+  </tr>`;};
+  const groupHead=(label,n)=>`<tr class="grouprow"><td colspan="${NC}">${label} · ${n}</td></tr>`;
+
+  let body='';
+  if(g0.length) body+=groupHead('🚀 Hareket başladı',g0.length)+g0.map(r=>rowHtml(r,0)).join('');
+  if(g1.length) body+=groupHead('★ Tam pozitif',g1.length)+g1.map(r=>rowHtml(r,1)).join('');
+  if(g2.length) body+=groupHead("◆ 2'li pozitif",g2.length)+g2.map(r=>rowHtml(r,2)).join('');
+  if(g3.length){
+    if(techShowRest) body+=groupHead('RSI sinyali (RSI\'ya göre)',g3.length)+g3.map(r=>rowHtml(r,3)).join('');
+    else body+=`<tr class="morerow"><td colspan="${NC}"><button class="morebtn" onclick="techLoadMore()">↓ Daha fazla yükle — ${g3.length} coin (sadece RSI sinyali)</button></td></tr>`;
+  }
+  t.innerHTML=thead(cols,'tech')+'<tbody>'+(body||emptyRow(NC))+'</tbody>';
 }
 
 // "Tümü" sekmesi kaynağı: alpha → COINS (tam veri); tümü/alpha-dışı → teknik evren (/tech),
