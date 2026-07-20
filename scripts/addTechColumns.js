@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS coin_tech_signals (
   ma50                DECIMAL(38,18) NULL,
   ma200               DECIMAL(38,18) NULL,
   ma_cross_bars_ago   INT           NULL,
+  ma_source           VARCHAR(8)    NULL COMMENT 'MA hangi dilimden: kendi tf, ya da MA200 yoksa 1d devri',
   macd                DECIMAL(38,18) NULL,
   macd_signal         DECIMAL(38,18) NULL,
   macd_hist           DECIMAL(38,18) NULL,
@@ -58,6 +59,16 @@ CREATE TABLE IF NOT EXISTS coin_tech_signals (
     } catch (e) {
       if (e.code === 'ER_DUP_FIELDNAME') console.log(`• zaten var: ${name}`);
       else console.error(`✗ ${name}:`, e.message);
+    }
+  }
+  // Tablo önceki sürümde oluşturulmuşsa sonradan eklenen kolonlar (CREATE IF NOT EXISTS bunları eklemez)
+  for (const [name, def] of [['ma_source', "VARCHAR(8) NULL COMMENT 'MA kaynağı dilim'"]]) {
+    try {
+      await pool.query(`ALTER TABLE coin_tech_signals ADD COLUMN \`${name}\` ${def}`);
+      console.log(`✓ eklendi: coin_tech_signals.${name}`);
+    } catch (e) {
+      if (e.code === 'ER_DUP_FIELDNAME') console.log(`• zaten var: coin_tech_signals.${name}`);
+      else console.error(`✗ coin_tech_signals.${name}:`, e.message);
     }
   }
   await pool.end();

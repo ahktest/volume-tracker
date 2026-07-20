@@ -93,7 +93,13 @@
     <div class="muted" style="margin-top:10px;font-size:11px">Günlük kapanışlardan hesaplanır; aynı varlığın iki borsası olduğundan sinyaller yakındır — heuristik.</div>
   </div>
 
-  <div class="card">
+  <div class="card" id="techCard" style="display:none">
+    <h2>Teknik sinyaller — zaman dilimleri</h2>
+    <table id="techTbl"></table>
+    <div class="muted" style="margin-top:10px;font-size:11px">GC/DC = MA50 vs MA200 golden/death cross · * = bu dilimde MA200 oluşmadığı için günlük MA'dan devralındı.</div>
+  </div>
+
+  <div class="card" id="eventsCard">
     <h2>Pump geçmişi (≥9×)</h2>
     <table id="events"></table>
   </div>
@@ -118,20 +124,29 @@ async function load(){
   if(!symbol){ showErr('symbol parametresi yok'); return; }
   document.getElementById('title').innerHTML=symbol+' <span class="sub">yükleniyor…</span>';
   let d;
-  try{ const r=await fetch(`${API}/coin/${symbol}`); if(!r.ok){ showErr(r.status===404?'Bu coin coin_metrics\'te yok — önce "Tümünü güncelle" çalıştır.':'Hata '+r.status); return; } d=await r.json(); }
+  try{ const r=await fetch(`${API}/coin/${symbol}`); if(!r.ok){ showErr(r.status===404?'Bu sembol TRADING futures listesinde bulunamadı.':'Hata '+r.status); return; } d=await r.json(); }
   catch(e){ showErr(e.message); return; }
   render(d);
 }
 
 function render(d){
   const m=d.metrics;
+  // tech-only: coin alpha∩futures evreninde değil (Teknik Takip'ten geldi) →
+  // pump geçmişi / konsolidasyon / lead-lag kartları anlamsız, gizlenir.
+  const techOnly=!!d.techOnly;
   document.getElementById('title').innerHTML=symbol+(m.is_sleeping?' <span class="sleep-tag">UYUYOR</span>':'')+
+    (techOnly?' <span class="vbadge v-F" title="Bu coin alpha evreninde değil — sadece teknik veriler gösteriliyor">TEKNİK</span>':'')+
     ` <span class="sub">${m.status||''} ${m.contract_type||''}</span>`;
   const cmc=m.cmc_slug?` <a class="cmc" href="https://coinmarketcap.com/currencies/${m.cmc_slug}/" target="_blank" rel="noopener">CoinMarketCap ↗</a>`:'';
   document.getElementById('badges').innerHTML=venues(m)+cmc+(m.alpha_id?` <span class="muted" style="font-size:11px">alpha_id: ${m.alpha_id}</span>`:'');
 
   const dist=N(m.dist_lo7);
-  const kpi=[
+  const lastClose=(d.klines&&d.klines.length)?d.klines[d.klines.length-1].c:null;
+  const kpi = techOnly ? [
+    ['Son fiyat', fmtPrice(lastClose)],
+    ['Mcap', fmtMcap(m.mcap_usd)],
+    ['Kapsam', 'teknik', 'muted'],
+  ] : [
     ['Son fiyat', fmtPrice(m.last_price)],
     ['Konsolidasyon', (m.consolidation_days??'—')+' g', m.is_sleeping?'pos':''],
     ['Konsol. range', m.cons_range_pct!=null?Number(m.cons_range_pct).toFixed(0)+'%':'—'],
@@ -147,6 +162,11 @@ function render(d){
 
   renderChart(d,m);
   renderRsi(d);
+  renderTechSignals(d);
+  // tech-only'de pump geçmişi kartı anlamsız (evren dışı, pump_events yok);
+  // "bu coini güncelle" de çalışmaz (pump evreninde değil) → gizle
+  document.getElementById('eventsCard').style.display = techOnly ? 'none' : '';
+  if(techOnly) document.getElementById('btnRefresh').style.display='none';
   renderLeadLag(d);
   renderEvents(d.events);
 }
@@ -205,6 +225,40 @@ function renderRsi(d){
         zoom:{zoom:{wheel:{enabled:true},pinch:{enabled:true},drag:{enabled:true,modifierKey:'shift',backgroundColor:'rgba(96,165,250,.15)'},mode:'x'},pan:{enabled:true,mode:'x'}}},
       scales:{x:{ticks:{color:'#6b7280',maxTicksLimit:8},grid:{color:'#1a2332'}},
               y:{min:0,max:100,ticks:{color:'#6b7280',stepSize:20},grid:{color:'#1a2332'}}}}});
+}
+
+// ── Teknik sinyaller (1d / 4h / 1w) ──
+const TF_LABEL={'1d':'Günlük','4h':'4 Saat','1w':'Haftalık'};
+const TF_ORDER=['1d','4h','1w'];
+const tfUnit=tf=>tf==='1d'?'g':tf==='1w'?'hf':'bar';
+function renderTechSignals(d){
+  const card=document.getElementById('techCard');
+  const rows=(d.techRows||[]).slice().sort((a,b)=>TF_ORDER.indexOf(a.timeframe)-TF_ORDER.indexOf(b.timeframe));
+  if(!rows.length){ card.style.display='none'; return; }
+  card.style.display='';
+  const head='<thead><tr><th>Dilim</th><th>RSI</th><th>RSI ort.</th><th>Kesişim</th><th>MA</th><th>MACD</th></tr></thead>';
+  document.getElementById('techTbl').innerHTML=head+'<tbody>'+rows.map(r=>{
+    const rsi=N(r.rsi14), rma=N(r.rsi_ma), rb=N(r.rsi_cross_bars_ago);
+    const f=N(r.ma50), s=N(r.ma200), mb=N(r.ma_cross_bars_ago);
+    const src=r.ma_source||r.timeframe, inh=src!==r.timeframe;
+    let maTxt='<span class="muted">—</span>';
+    if(f!==null&&s!==null){
+      const g=f>s;
+      maTxt=`<span class="${g?'pos':'neg'}">${g?'GC':'DC'}${inh?'*':''}</span>`
+           +(mb!==null?` <span class="muted">${mb}${tfUnit(src)}</span>`:'');
+    }
+    const mc=N(r.macd);
+    const mcTxt = mc===null?'<span class="muted">—</span>'
+                : `<span class="${mc>0?'pos':'neg'}">${mc>0?'↑':'↓'}</span> <span class="muted">${mc.toExponential(2)}</span>`;
+    return `<tr>
+      <td><b>${TF_LABEL[r.timeframe]||r.timeframe}</b></td>
+      <td class="${rsi===null?'muted':rsi<=30?'pos':rsi>=70?'neg':''}">${rsi!==null?rsi.toFixed(1):'—'}</td>
+      <td class="muted">${rma!==null?rma.toFixed(1):'—'}</td>
+      <td>${rb!==null?rb+tfUnit(r.timeframe)+' önce':'<span class="muted">—</span>'}</td>
+      <td>${maTxt}</td>
+      <td>${mcTxt}</td>
+    </tr>`;
+  }).join('')+'</tbody>';
 }
 
 // ── Lead-lag: futures ↔ alpha ilişkisi ──

@@ -77,12 +77,36 @@ module.exports = (pool) => {
   // Tüm dilimler tek çağrıda döner; frontend seçiciyi client-side değiştirir.
   router.get('/tech', async (req, res) => {
     try {
-      const [rows] = await pool.query(
-        `SELECT symbol, timeframe, rsi14, rsi_ma, rsi_cross_bars_ago,
-                ma50, ma200, ma_cross_bars_ago, macd, macd_signal, macd_hist,
-                macd_cross_bars_ago, updated_at
-           FROM coin_tech_signals`
-      );
+      // Evren = tüm TRADING futures. coin_metrics (alpha∩futures) LEFT JOIN — alpha
+      // olmayan coinlerde pump/konsolidasyon alanları null gelir, sekme yine çalışır.
+      const [rows] = await pool.query(`
+        SELECT t.symbol, t.timeframe, t.rsi14, t.rsi_ma, t.rsi_cross_bars_ago,
+               t.ma50, t.ma200, t.ma_cross_bars_ago, t.ma_source,
+               t.macd, t.macd_signal, t.macd_hist, t.macd_cross_bars_ago, t.updated_at,
+               cm.dist_lo7, cm.ret7d, cm.consolidation_days, cm.last_price, cm.is_sleeping,
+               (cm.symbol IS NOT NULL) AS in_metrics,
+               bft.mcap_usd, bft.cmc_slug,
+               COALESCE(ec.is_alpha,0) AS is_alpha, COALESCE(ec.is_fut,0) AS is_fut,
+               COALESCE(ec.is_spot,0)  AS is_spot,  COALESCE(ec.is_upbit,0) AS is_upbit,
+               COALESCE(ec.is_bybit,0) AS is_bybit,
+               pe.max_magnitude
+          FROM coin_tech_signals t
+          LEFT JOIN coin_metrics cm ON cm.symbol = t.symbol
+          LEFT JOIN (
+            SELECT base_asset, MAX(mcap_usd) AS mcap_usd, MAX(cmc_slug) AS cmc_slug
+            FROM binance_futures_tracking WHERE is_delist = 0 GROUP BY base_asset
+          ) bft ON bft.base_asset = t.symbol
+          LEFT JOIN (
+            SELECT symbol,
+              MAX(source='binance_alpha')   AS is_alpha, MAX(source='binance_futures') AS is_fut,
+              MAX(source='binance_spot')    AS is_spot,  MAX(source='upbit')           AS is_upbit,
+              MAX(source='bybit_futures')   AS is_bybit
+            FROM exchangecoins GROUP BY symbol
+          ) ec ON ec.symbol = t.symbol
+          LEFT JOIN (
+            SELECT symbol, MAX(magnitude_x) AS max_magnitude FROM pump_events GROUP BY symbol
+          ) pe ON pe.symbol = t.symbol
+      `);
       res.json({
         meta: {
           timeframes: cfg.TIMEFRAMES,
@@ -172,8 +196,23 @@ module.exports = (pool) => {
           FROM binance_futures_tracking WHERE is_delist = 0 GROUP BY base_asset
         ) cmc ON cmc.base_asset = cm.symbol
         WHERE cm.symbol = ?`, [symbol]);
-      if (!metrics) return res.status(404).json({ error: 'not_found' });
-      const [events] = await pool.query(
+      // coin_metrics'te yoksa (alpha∩futures dışı, Teknik Takip evreninden gelen coin)
+      // 404 verme — tech-only moda düş: futures meta + teknik sinyaller yeterli.
+      let techOnly = false;
+      let m = metrics;
+      if (!m) {
+        const [[fut]] = await pool.query(
+          `SELECT base_asset, mcap_usd, status, contract_type, cmc_slug, cmc_id
+             FROM binance_futures_tracking
+            WHERE base_asset = ? AND is_delist = 0 AND status = 'TRADING'
+            ORDER BY (contract_type='PERPETUAL') DESC LIMIT 1`, [symbol]);
+        if (!fut) return res.status(404).json({ error: 'not_found' });
+        techOnly = true;
+        m = { symbol, mcap_usd: fut.mcap_usd, status: fut.status, contract_type: fut.contract_type,
+              cmc_slug: fut.cmc_slug, cmc_id: fut.cmc_id, is_fut: 1, alpha_id: null };
+      }
+      const metricsOut = m;
+      const [events] = techOnly ? [[]] : await pool.query(
         'SELECT * FROM pump_events WHERE symbol = ? ORDER BY trough_date ASC', [symbol]);
       let klines = [];
       try {
@@ -182,9 +221,9 @@ module.exports = (pool) => {
       } catch (e) { /* grafik yoksa boş */ }
       // alpha serisi (futures ile aynı grafikte overlay + lead-lag analizi için)
       let alphaKlines = [];
-      if (metrics.alpha_id) {
+      if (metricsOut.alpha_id) {
         try {
-          const raw = await binance.alphaKlines(metrics.alpha_id, cfg.KLINE_INTERVAL, 365);
+          const raw = await binance.alphaKlines(metricsOut.alpha_id, cfg.KLINE_INTERVAL, 365);
           alphaKlines = raw.map(k => ({ t: +k[0], c: +k[4] }));
         } catch (e) { /* alpha yoksa boş */ }
       }
@@ -194,7 +233,13 @@ module.exports = (pool) => {
         const r = computeRsi(klines.map(k => k.c));
         rsi = r.rsi; rsiMa = r.ma;
       }
-      res.json({ metrics, events, klines, alphaKlines, rsi, rsiMa });
+      // Çoklu dilim teknik sinyalleri (bu coin için) — tech-only modda ana içerik
+      let techRows = [];
+      try {
+        [techRows] = await pool.query(
+          'SELECT * FROM coin_tech_signals WHERE symbol = ?', [symbol]);
+      } catch (e) { /* tablo yoksa boş */ }
+      res.json({ metrics: metricsOut, techOnly, events, klines, alphaKlines, rsi, rsiMa, techRows });
     } catch (err) {
       console.error('[pump/coin] hata:', err);
       res.status(500).json({ error: err.message });
