@@ -123,6 +123,32 @@ module.exports = (pool) => {
     }
   });
 
+  // ── AI Yorum (Claude Code CLI headless — abonelikten düşer) ──
+  const ai = require('../lib/aiComment');
+
+  // Bugünün yorumları + limit durumu
+  router.get('/ai/:symbol', async (req, res) => {
+    try { res.json(await ai.today(pool, req.params.symbol.toUpperCase())); }
+    catch (err) {
+      console.error('[pump/ai get] hata:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Yeni yorum üret (limit + eşzamanlılık kontrolü lib/aiComment içinde)
+  router.post('/ai/:symbol', async (req, res) => {
+    const symbol = req.params.symbol.toUpperCase();
+    try {
+      const r = await ai.generate(pool, symbol);
+      console.log(`[pump/ai] ${symbol} yorum üretildi (id=${r.id})`);
+      res.json(r);
+    } catch (err) {
+      const status = err.status || 500;
+      if (status >= 500) console.error(`[pump/ai] ${symbol} hata:`, err.message);
+      res.status(status).json({ error: err.message, limits: err.limits });
+    }
+  });
+
   // ── GET /live : ucuz batch ticker + funding + breakout (lib/live) ──
   router.get('/live', async (req, res) => {
     try {
