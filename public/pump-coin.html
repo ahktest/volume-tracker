@@ -391,7 +391,18 @@ function mdToHtml(md){
 }
 const fmtTime=d=>{ const t=new Date(d); return isNaN(t)?'':t.toLocaleString('tr-TR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); };
 
-let aiState={comments:[],limits:null};
+// Markdown'dan tek bir "## Başlık" bölümünün gövdesini çıkarır
+function extractSection(md,title){
+  const out=[]; let on=false;
+  for(const l of String(md||'').split('\n')){
+    const h=l.match(/^#{1,4}\s+(.*)$/);
+    if(h){ on = h[1].trim().toLowerCase().startsWith(title.toLowerCase()); continue; }
+    if(on) out.push(l);
+  }
+  return out.join('\n').trim();
+}
+
+let aiState={comments:[],latest:null,limits:null};
 function renderAi(){
   const card=document.getElementById('aiCard'), body=document.getElementById('aiBody');
   const btn=document.getElementById('btnAi'), L=aiState.limits;
@@ -409,8 +420,20 @@ function renderAi(){
     document.getElementById('aiMeta').textContent =
       `· bugün ${L.coinUsed}/${L.coinLimit} · genel ${L.dayUsed}/${L.dayLimit} · bütçe $${L.spent}/$${L.budget}`;
   }
-  // Yorumlar (yeni üstte)
-  if(!aiState.comments.length){ card.style.display='none'; return; }
+  // Bugün yorum yok → varsa son yorumdan sadece kalıcı "Proje" bölümünü göster.
+  // Haber/teknik kısımları bilinçli olarak gösterilmez, onlar eskir.
+  if(!aiState.comments.length){
+    const L=aiState.latest;
+    const proj=L?extractSection(L.comment,'Proje'):'';
+    if(!proj){ card.style.display='none'; return; }
+    card.style.display='';
+    body.innerHTML=`<div class="ai-item">
+      <div class="ai-time">Proje bilgisi · son yorum ${fmtTime(L.created_at)}
+        <span class="muted">— teknik veriler ve haberler güncel değil, yeniden yorumlat</span></div>
+      <div class="ai-md">${mdToHtml('## Proje\n'+proj)}</div></div>`;
+    return;
+  }
+  // Bugünün yorumları (yeni üstte)
   card.style.display='';
   body.innerHTML=aiState.comments.map(c=>
     `<div class="ai-item"><div class="ai-time">${fmtTime(c.created_at)}</div><div class="ai-md">${mdToHtml(c.comment||'')}</div></div>`
@@ -420,7 +443,7 @@ async function loadAi(){
   try{
     const r=await fetch(`${API}/ai/${symbol}`); if(!r.ok) return;
     const j=await r.json();
-    aiState={comments:j.comments||[],limits:j.limits||null};
+    aiState={comments:j.comments||[],latest:j.latest||null,limits:j.limits||null};
     renderAi();
   }catch(e){ /* AI opsiyonel — sayfayı bozmasın */ }
 }
