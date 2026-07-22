@@ -465,6 +465,71 @@ app.get('/api/positions/binancefable/breakdown', requireDashKey, async (req, res
   }
 });
 
+/**
+ * binancefable hesap eslemesi (account_id -> tab)
+ * default ve ahk ayni kisi -> 'ahk' tabinda birlesir
+ */
+const FABLE_ACCOUNTS = {
+  ahk:  ['default', 'ahk'],
+  ado:  ['ado'],
+  faik: ['faik'],
+};
+
+/**
+ * GET /api/positions/binancefable/account-balance?account=ahk
+ * Secilen hesap(lar) icin gunluk bakiye gecmisi + 7g/30g/YTD degisim
+ */
+app.get('/api/positions/binancefable/account-balance', requireDashKey, async (req, res) => {
+  try {
+    const acc = String(req.query.account || 'ahk').toLowerCase();
+    const ids = FABLE_ACCOUNTS[acc];
+    if (!ids) {
+      const e = new Error(`unknown_account: ${acc}`);
+      e.status = 400;
+      throw e;
+    }
+    const placeholders = ids.map(() => '?').join(',');
+
+    const [rows] = await pool.query(`
+      SELECT date2, \`totalfuturebalance\` AS balance
+      FROM \`tradefable\`
+      WHERE status='CLOSED' AND totalfuturebalance IS NOT NULL AND date2 IS NOT NULL
+        AND account_id IN (${placeholders})
+      ORDER BY date2 ASC
+    `, ids);
+
+    // gunluk: gun icindeki son bakiye (rows sirali)
+    const dayMap = new Map();
+    for (const r of rows) {
+      const key = new Date(r.date2).toISOString().slice(0, 10);
+      dayMap.set(key, Number(r.balance));
+    }
+    const history = [...dayMap.entries()].map(([date, balance]) => ({ date, balance }));
+
+    // degisim: ilgili pencerede ilk/son bakiye farki
+    const now = Date.now();
+    const DAY = 24 * 3600 * 1000;
+    const yearNow = new Date(now).getUTCFullYear();
+    const diffIn = (predicate) => {
+      const inWin = rows.filter(predicate);
+      if (!inWin.length) return 0;
+      return Number(inWin[inWin.length - 1].balance) - Number(inWin[0].balance);
+    };
+
+    res.json({
+      changes: {
+        diff_7d:  diffIn(r => new Date(r.date2).getTime() >= now - 7 * DAY),
+        diff_30d: diffIn(r => new Date(r.date2).getTime() >= now - 30 * DAY),
+        diff_ytd: diffIn(r => new Date(r.date2).getUTCFullYear() === yearNow),
+      },
+      history,
+    });
+  } catch (err) {
+    console.error('[/api/positions/binancefable/account-balance] Hata:', err);
+    res.status(err.status || 500).json({ error: err.message || 'Bakiye alinamadi' });
+  }
+});
+
 /* ────────────────────────────────────────────
  * LEGACY: /api/futures-* (binance icin geriye donuk uyumluluk)
  * Yeni kod /api/positions/binance/... kullanmali

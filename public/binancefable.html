@@ -71,6 +71,12 @@
 
     .muted{color:#6b7280;font-size:12px;margin-top:8px}
 
+    /* ─── Account tabs ─── */
+    .acc-tabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+    .acc-tab{padding:8px 18px;background:#0f172a;border:1px solid #1f2937;border-radius:8px;color:#9ca3af;font-size:13px;cursor:pointer;font-weight:600;transition:all .2s}
+    .acc-tab:hover{color:#e5e7eb;border-color:#374151}
+    .acc-tab.active{background:#2563eb;border-color:#2563eb;color:#fff}
+
     /* ─── Responsive ─── */
     @media(max-width:650px){
       .kpi-row{grid-template-columns:1fr}
@@ -283,27 +289,7 @@
     </div>
   </div>
 
-  <!-- 5) Balance degisimi -->
-  <div class="card">
-    <h2>Total Balance Change</h2>
-    <div class="kpi-row">
-      <div class="kpi">
-        <div class="label">Son 7 gun</div>
-        <div id="bal7" class="value">—</div>
-      </div>
-      <div class="kpi">
-        <div class="label">Son 30 gun</div>
-        <div id="bal30" class="value">—</div>
-      </div>
-      <div class="kpi">
-        <div class="label">Yillik (YTD)</div>
-        <div id="balYtd" class="value">—</div>
-      </div>
-    </div>
-    <div class="muted">totalfuturebalance: ilgili periyottaki ilk ve son deger farki</div>
-  </div>
-
-  <!-- 6) Gunluk tablo -->
+  <!-- 5) Gunluk tablo -->
   <div class="card">
     <h2>Gunluk Win/Loss & PNL</h2>
     <div class="table-wrap">
@@ -323,13 +309,35 @@
     </div>
   </div>
 
-  <!-- 7) Balance Chart -->
+  <!-- 6) Hesap bazli toplam bakiye (tabli) -->
   <div class="card">
-    <h2>Total Balance (Equity Curve)</h2>
+    <h2>Hesap Bazli Toplam Bakiye</h2>
+
+    <div class="acc-tabs" id="accTabs">
+      <button class="acc-tab active" data-acc="ahk">ahk</button>
+      <button class="acc-tab" data-acc="ado">ado</button>
+      <button class="acc-tab" data-acc="faik">faik</button>
+    </div>
+
+    <div class="kpi-row">
+      <div class="kpi">
+        <div class="label">Son 7 gun</div>
+        <div id="bal7" class="value">—</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Son 30 gun</div>
+        <div id="bal30" class="value">—</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Yillik (YTD)</div>
+        <div id="balYtd" class="value">—</div>
+      </div>
+    </div>
+
     <div class="chart-wrap">
       <canvas id="balanceChart"></canvas>
     </div>
-    <div class="muted">Gunluk kapanislara gore totalfuturebalance</div>
+    <div class="muted">totalfuturebalance · secili hesap (account_id) · ahk = default + ahk</div>
   </div>
 
 </div>
@@ -538,6 +546,24 @@ function buildBalanceChart(labels, data, fullDates) {
   });
 }
 
+// ─── Account balance (tabli) ───
+let currentAccount = 'ahk';
+
+async function loadAccountBalance(account) {
+  const bal = await apiGet(`${API_BASE}/account-balance?account=${encodeURIComponent(account)}`);
+  const ch = bal.changes || { diff_7d:0, diff_30d:0, diff_ytd:0 };
+  setValue(el('bal7'),  ch.diff_7d, 4);
+  setValue(el('bal30'), ch.diff_30d, 4);
+  setValue(el('balYtd'), ch.diff_ytd, 4);
+
+  const hist = bal.history || [];
+  buildBalanceChart(
+    hist.map(r => formatDateShort(r.date)),
+    hist.map(r => r.balance),
+    hist.map(r => r.date)
+  );
+}
+
 // ─── Load ───
 async function loadAll() {
   const sinceDays = el('sinceDays').value;
@@ -584,24 +610,13 @@ async function loadAll() {
   fillWl('alphaLongWl',  byLD.alpha_LONG);
   fillWl('alphaShortWl', byLD.alpha_SHORT);
 
-  // 3) Balance changes
-  const bal = await apiGet(`${API_BASE}/balance-changes`);
-  setValue(el('bal7'), bal.diff_7d, 4);
-  setValue(el('bal30'), bal.diff_30d, 4);
-  setValue(el('balYtd'), bal.diff_ytd, 4);
+  // 3) Hesap bazli bakiye (secili tab)
+  await loadAccountBalance(currentAccount);
 
   // 4) Daily table
   const daily = await apiGet(`${API_BASE}/daily?limit=14`);
   const tbody = el('dailyBody');
   tbody.innerHTML = '';
-
-  // 5) Balance chart
-  const balHist = await apiGet(`${API_BASE}/balance-history`);
-  buildBalanceChart(
-    balHist.map(r => formatDateShort(r.date)),
-    balHist.map(r => r.balance),
-    balHist.map(r => r.date)
-  );
 
   if (!daily.length) {
     tbody.innerHTML = '<tr><td colspan="4" class="muted">Kayit yok</td></tr>';
@@ -623,6 +638,15 @@ async function loadAll() {
 
 el('refreshBtn').addEventListener('click', () => loadAll().catch(err => alert(err.message)));
 el('sinceDays').addEventListener('change', () => loadAll().catch(err => alert(err.message)));
+
+// Hesap tab'lari: sadece bakiye bolumunu yeniler
+el('accTabs').addEventListener('click', (e) => {
+  const btn = e.target.closest('.acc-tab');
+  if (!btn) return;
+  currentAccount = btn.dataset.acc;
+  document.querySelectorAll('#accTabs .acc-tab').forEach(b => b.classList.toggle('active', b === btn));
+  loadAccountBalance(currentAccount).catch(err => alert(err.message));
+});
 </script>
 </body>
 </html>
