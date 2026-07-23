@@ -131,10 +131,28 @@ app.get("/ping", (req, res) => res.send("pong"));
  * POSITIONS API (binance & bybit ortak)
  * ──────────────────────────────────────────── */
 
+/**
+ * binancefable hesap eslemesi (tab adi -> account_id listesi)
+ * default ve ahk ayni kisi -> 'ahk' altinda birlesir
+ * Tek kaynak: hem tab'lar hem PNL/bakiye filtreleri buradan beslenir.
+ */
+const FABLE_ACCOUNTS = {
+  ahk:  ['default', 'ahk'],
+  ado:  ['ado'],
+  faik: ['faik'],
+};
+
 const EXCHANGE_CONFIG = {
   binance:      { table: 'futures_positions', balanceCol: 'total_futures_balance' },
   bybit:        { table: 'bybitfuturepos',    balanceCol: 'total_balance' },
-  binancefable: { table: 'tradefable',        balanceCol: 'totalfuturebalance', accountCol: 'account_id', accounts: ['default', 'ahk'], balanceAccounts: ['ahk'] },
+  binancefable: {
+    table: 'tradefable',
+    balanceCol: 'totalfuturebalance',
+    accountCol: 'account_id',
+    // PNL / istatistik / breakdown ve bakiye: default + ahk
+    accounts: FABLE_ACCOUNTS.ahk,
+    balanceAccounts: FABLE_ACCOUNTS.ahk,
+  },
 };
 
 function getExchange(name) {
@@ -160,7 +178,7 @@ function inClauseLiteral(col, values) {
 function accountFilterLiteral(cfg) {
   return cfg && cfg.accountCol ? inClauseLiteral(cfg.accountCol, cfg.accounts) : '';
 }
-// Bakiye (total balance): sadece balanceAccounts (ahk). Tanimli degilse accounts'a duser.
+// Bakiye (total balance): balanceAccounts (default + ahk). Tanimli degilse accounts'a duser.
 function balanceFilterLiteral(cfg) {
   return cfg && cfg.accountCol ? inClauseLiteral(cfg.accountCol, cfg.balanceAccounts || cfg.accounts) : '';
 }
@@ -311,7 +329,7 @@ app.get('/api/positions/:exchange/balance-changes', requireDashKey, async (req, 
     const cfg = getExchange(req.params.exchange);
     const tbl = cfg.table, bc = cfg.balanceCol;
 
-    // binancefable: bakiye yalnizca balanceAccounts (ahk) hesabindan
+    // binancefable: bakiye balanceAccounts (default + ahk) hesaplarindan
     if (cfg.accountCol) {
       const acc = balanceFilterLiteral(cfg);
       const [rows] = await pool.query(combinedDailyBalanceSql(cfg, acc));
@@ -386,7 +404,7 @@ app.get('/api/positions/:exchange/balance-history', requireDashKey, async (req, 
     const cfg = getExchange(req.params.exchange);
     let rows;
     if (cfg.accountCol) {
-      // binancefable: bakiye yalnizca balanceAccounts (ahk) hesabindan
+      // binancefable: bakiye balanceAccounts (default + ahk) hesaplarindan
       [rows] = await pool.query(combinedDailyBalanceSql(cfg, balanceFilterLiteral(cfg)));
     } else {
       [rows] = await pool.query(`
@@ -464,16 +482,6 @@ app.get('/api/positions/binancefable/breakdown', requireDashKey, async (req, res
     res.status(err.status || 500).json({ error: err.message || 'Breakdown alinamadi' });
   }
 });
-
-/**
- * binancefable hesap eslemesi (account_id -> tab)
- * default ve ahk ayni kisi -> 'ahk' tabinda birlesir
- */
-const FABLE_ACCOUNTS = {
-  ahk:  ['default', 'ahk'],
-  ado:  ['ado'],
-  faik: ['faik'],
-};
 
 /**
  * GET /api/positions/binancefable/account-balance?account=ahk
