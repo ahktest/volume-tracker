@@ -55,11 +55,6 @@
 
     .card{background:#111827;border:1px solid #1f2937;border-radius:12px;padding:16px 18px;margin-bottom:16px}
     .card h2{font-size:14px;color:#93c5fd;margin-bottom:12px}
-    /* isim yanı bilgi simgesi — üzerine gelince (title) açıklama */
-    .info{display:inline-block;width:14px;height:14px;line-height:13px;text-align:center;border-radius:50%;
-          background:#1f2937;color:#93c5fd;font-size:10px;font-weight:700;font-style:normal;cursor:help;
-          border:1px solid #374151;vertical-align:middle;margin-left:5px}
-    .info:hover{background:#374151;color:#bfdbfe}
     .chart-wrap{height:360px}
 
     table{width:100%;border-collapse:collapse;font-size:13px}
@@ -90,7 +85,7 @@
   </div>
 
   <div class="card" id="aiCard" style="display:none">
-    <h2>🤖 AI Yorumu <span class="info" title="Claude'un coin hakkında güncel haber araması (web) + teknik verilerin yorumu. Günde sınırlı üretilir; gün içinde yeni yorum yoksa sabit proje bilgisi gösterilir. Yatırım tavsiyesi değildir.">i</span> <span class="muted admin-only" id="aiMeta" style="font-weight:400;font-size:11px"></span></h2>
+    <h2>🤖 AI Yorumu <span class="muted admin-only" id="aiMeta" style="font-weight:400;font-size:11px"></span></h2>
     <div id="aiBody"></div>
   </div>
 
@@ -100,10 +95,7 @@
 
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px">
-      <div style="display:flex;align-items:center">
-        <h2 id="chartTitle" style="margin:0">Fiyat (son 365g) — konsolidasyon bandı</h2>
-        <span class="info" title="Son 365 günün futures (varsa alpha) kapanış grafiği. Kesikli çizgiler: konsolidasyon orta bandı ve ±%30 üst/alt band. Tekerlekle yakınlaş, sürükleyerek kaydır.">i</span>
-      </div>
+      <h2 id="chartTitle" style="margin:0">Fiyat (son 365g) — konsolidasyon bandı</h2>
       <div style="display:flex;align-items:center;gap:10px">
         <span class="muted" style="font-size:11px">tekerlek: zoom · sürükle: kaydır · shift+sürükle: kutu</span>
         <button id="zoomReset" style="background:#1f2937;color:#93c5fd;border:1px solid #374151;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer">⤢ sıfırla</button>
@@ -114,27 +106,27 @@
 
   <div class="card" id="rsiCard" style="display:none">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px">
-      <h2 style="margin:0">RSI (14) + ortalaması <span class="info" title="RSI(14) momentum göstergesi ve onun hareketli ortalaması. 30 altı aşırı satım, 70 üstü aşırı alım. Mor: RSI, sarı: ortalaması. RSI'nin ortalamayı aşağıdan yukarı kesmesi toparlanma sinyali sayılır.">i</span> <span id="rsiNow" class="muted" style="font-weight:400;font-size:12px"></span></h2>
+      <h2 style="margin:0">RSI (14) + ortalaması <span id="rsiNow" class="muted" style="font-weight:400;font-size:12px"></span></h2>
       <span class="muted" style="font-size:11px">mor: RSI · sarı: RSI ort. · aşırı satım 30 / aşırı alım 70</span>
     </div>
     <div class="chart-wrap" style="height:220px"><canvas id="rsiChart"></canvas></div>
   </div>
 
   <div class="card" id="llCard" style="display:none">
-    <h2>Futures ↔ Alpha ilişkisi (lead-lag) <span class="info" title="Aynı varlığın futures ve alpha serilerinin ilişkisi: hangisi önce hareket ediyor (lead-lag), günlük korelasyon, zirve zamanlaması ve premium. Aynı varlığın iki borsası olduğundan heuristiktir.">i</span></h2>
+    <h2>Futures ↔ Alpha ilişkisi (lead-lag)</h2>
     <div id="llVerdict" style="margin-bottom:12px"></div>
     <div class="kpi-row" id="llStats"></div>
     <div class="muted" style="margin-top:10px;font-size:11px">Günlük kapanışlardan hesaplanır; aynı varlığın iki borsası olduğundan sinyaller yakındır — heuristik.</div>
   </div>
 
   <div class="card" id="techCard" style="display:none">
-    <h2>Teknik sinyaller — zaman dilimleri <span class="info" title="1d / 4h / 1w için RSI, RSI-ortalama kesişimi, MA50 vs MA200 golden/death cross ve MACD durumu. GC/DC yanındaki * = MA200 o dilimde oluşmadığı için günlük MA'dan devralındı.">i</span></h2>
+    <h2>Teknik sinyaller — zaman dilimleri</h2>
     <table id="techTbl"></table>
     <div class="muted" style="margin-top:10px;font-size:11px">GC/DC = MA50 vs MA200 golden/death cross · * = bu dilimde MA200 oluşmadığı için günlük MA'dan devralındı.</div>
   </div>
 
   <div class="card" id="eventsCard">
-    <h2>Pump geçmişi (≥9×) <span class="info" title="Bu coinin dipten tepeye en az 9× yapmış pump kayıtları. Market (futures/alpha), dip-zirve tarihleri, kaç kat, süre, hız (GÜÇLÜ ≤7g / YAVAŞ 8-30g / SLOW 31-60g) ve day-1 listeleme pump'ı olup olmadığı.">i</span></h2>
+    <h2>Pump geçmişi (≥9×)</h2>
     <table id="events"></table>
   </div>
 </div>

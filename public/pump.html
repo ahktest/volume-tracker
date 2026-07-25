@@ -108,11 +108,22 @@
     .kpi .combo b{color:#93c5fd}
     .kpi .combo small{font-size:11px}
     .hint{cursor:help;color:#6b7280;font-size:11px;border-bottom:1px dotted #4b5563}
-    /* isim yanı bilgi simgesi — üzerine gelince (title) açıklama */
+    /* başlık yanı bilgi simgesi — TIKLAYINCA pencere açar */
     .info{display:inline-block;width:14px;height:14px;line-height:13px;text-align:center;border-radius:50%;
-          background:#1f2937;color:#93c5fd;font-size:10px;font-weight:700;font-style:normal;cursor:help;
-          border:1px solid #374151;vertical-align:middle;margin-left:5px}
+          background:#1f2937;color:#93c5fd;font-size:10px;font-weight:700;font-style:normal;cursor:pointer;
+          border:1px solid #374151;vertical-align:middle;margin-left:4px}
     .info:hover{background:#374151;color:#bfdbfe}
+    /* tıkla-aç info penceresi */
+    .info-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;
+                  justify-content:center;z-index:200;padding:20px}
+    .info-overlay.show{display:flex}
+    .info-box{background:#111827;border:1px solid #374151;border-radius:12px;max-width:460px;width:100%;
+              padding:18px 20px;position:relative;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+    .info-box h3{color:#93c5fd;font-size:14px;margin-bottom:10px;padding-right:26px}
+    .info-box .txt{color:#d1d5db;font-size:13px;line-height:1.65;white-space:pre-line}
+    .info-box .x{position:absolute;top:10px;right:13px;background:none;border:none;color:#9ca3af;
+                 font-size:22px;cursor:pointer;line-height:1;padding:0}
+    .info-box .x:hover{color:#e5e7eb}
   </style>
 </head>
 <body>
@@ -227,6 +238,15 @@
   </div>
 </div>
 
+<!-- Tıkla-aç bilgi penceresi (başlık ⓘ'ları buraya doldurur) -->
+<div class="info-overlay" id="infoOverlay">
+  <div class="info-box">
+    <button class="x" onclick="closeInfo()" title="kapat">×</button>
+    <h3 id="infoTitle"></h3>
+    <div class="txt" id="infoText"></div>
+  </div>
+</div>
+
 <script>
 const API = '/api/pump';
 // ── Admin modu (güncelle butonlarını gizle) ──
@@ -243,6 +263,38 @@ let TECH = {};           // /tech → TECH[timeframe][symbol] = sinyal satırı
 let TF_META = {};        // zaman dilimi eşikleri (sunucudan; frontend'de sabit tutmuyoruz)
 let curTF = '1d';        // seçili zaman dilimi
 let sortState = { pumps:{col:'max_magnitude',dir:-1}, sleep:{col:'consolidation_days',dir:-1}, tech:{col:'rsi_cross_bars_ago',dir:1}, all:{col:'mcap_usd',dir:-1} };
+
+// ── başlık bilgi pencereleri (tıkla-aç) ──
+// Kolon anahtarına göre açıklama. Anahtar tablolar arası ortaktır (dist_lo7 vb. tek yerde).
+const INFO = {
+  venue: { t:'Venue — borsalar', d:'Coinin işlem gördüğü borsalar:\n\nA = Binance Alpha\nF = Binance Futures\nS = Binance Spot\nU = Upbit\nB = Bybit Futures\n\nBir coin spot\'a çıkınca saf alpha sayılmaz; o durumda A rozeti gizlenir.' },
+  vol_dryup_ratio: { t:'Hacim Kuruması', d:'Son 7 günün ortalama hacmi ÷ son 90 günün ortalama hacmi.\n\nDüşük değer (yeşil, <0.3) = hacim belirgin şekilde kurumuş, işlem ilgisi azalmış — çoğu zaman sert hareket öncesi sessizlik. >0.7 = normal.' },
+  bbw_percentile: { t:'Sıkışma (Bollinger)', d:'Bollinger bant genişliğinin son 180 gündeki yüzdelik sırası.\n\nDüşük (yeşil, <10) = fiyat çok dar bir aralıkta geziniyor, sıkışmış (patlamaya hazır). Yüksek = geniş/oynak.' },
+  cons_range_pct: { t:'Range %', d:'Konsolidasyon aralığının genişliği: bandın en yükseği ile en düşüğü arasındaki fark, yüzde olarak.\n\nKüçük = dar ve sıkı bir bant içinde yatay seyir.' },
+  dist_lo7: { t:'dist_lo7', d:'Güncel fiyatın son 7 günün EN DÜŞÜĞÜNE uzaklığı (%).\n\n0\'a yakın = dibe yapışık, breakout\'a hazır. Yüksek = dipten uzaklaşmış.' },
+  ret7d: { t:'7 günlük getiri', d:'Son 7 gündeki fiyat değişimi (%).' },
+  ret30d: { t:'30 günlük getiri', d:'Son 30 gündeki fiyat değişimi (%).' },
+  chgPct: { t:'24 saat değişim', d:'Son 24 saatlik fiyat değişimi (%).' },
+  consolidation_days: { t:'Konsolidasyon (gün)', d:'Fiyatın ±%30 bant içinde kaç gündür yatay seyrettiği.\n\n≥45 gün = "uyuyor" sayılır (breakout adayı).' },
+  is_sleeping: { t:'Uyuyor', d:'Coin en az 45 gündür dar bir bantta yatay mı?\n\n✓ = uyuyan / breakout adayı.' },
+  rsi14: { t:'RSI (14)', d:'Momentum göstergesi (0-100).\n\n≤30 aşırı satım (yeşil), ≥70 aşırı alım (kırmızı). Toparlanma, RSI\'nin ortalamasını yukarı kesmesiyle aranır.' },
+  rsi_ma: { t:'RSI ortalaması', d:'RSI\'nin hareketli ortalaması (14 SMA).\n\nRSI\'nin bu çizgiyi aşağıdan yukarı kesmesi, momentumun dönmeye başladığı sinyalidir.' },
+  rsi_cross_bars_ago: { t:'Kesişim (kaç önce)', d:'RSI\'nin ortalamasını en son kaç BAR önce yukarı kestiği.\n\n0 = son bar / bugün. Birim seçili zaman dilimine göre değişir (gün / 4s bar / hafta).' },
+  macd_hist: { t:'MACD histogram', d:'MACD çizgisi − sinyal çizgisi.\n\nPozitif (yeşil) = MACD sinyalin üstünde, boğa momentumu. MACD > 0 ayrıca sıfır çizgisinin üstünde demektir.' },
+  mcap_usd: { t:'Piyasa değeri', d:'Coinin dolar cinsinden piyasa değeri (market cap).' },
+  max_magnitude: { t:'En büyük ×', d:'Bu coinin geçmişte yaptığı en büyük pump — dipten tepeye kaç kat.\n\n— = kayıtlı ≥9× pump yok.' },
+  event_count: { t:'#Pump', d:'Bu coinin ≥9× (dipten tepeye) pump olay sayısı. Futures ve alpha ayrı sayılır.' },
+  fut_ath_age_days: { t:'ATH yaşı (gün)', d:'Futures zirvesinin (ATH) kaç gün önce yapıldığı.' },
+  tetik: { t:'Tetik tipleri', d:'Hangi breakout koşulunun yandığı:\n\n🔥 KIRILIM = fiyat 20 günün en yüksek kapanışını %1 aştı VE 24h hacim 20g ortalamasının 1.5 katı üstünde.\n\nBAND = konsolidasyon üst bandını kırdı (fiyat > cons_mid × 1.30).\n\nHACİM = 24h hacim, baz hacmin (vol_base) 3 katı üstünde.\n\n24S % = 24 saatlik değişim ≥ %15.' },
+};
+function infoIcon(key){ return INFO[key] ? ` <span class="info" onclick="event.stopPropagation();openInfoKey('${key}')">i</span>` : ''; }
+function openInfoKey(key){
+  const i=INFO[key]; if(!i) return;
+  document.getElementById('infoTitle').textContent=i.t;
+  document.getElementById('infoText').textContent=i.d;
+  document.getElementById('infoOverlay').classList.add('show');
+}
+function closeInfo(){ document.getElementById('infoOverlay').classList.remove('show'); }
 
 // ── helpers ──
 const N = v => (v===null||v===undefined||v==='') ? null : Number(v);
@@ -680,7 +732,7 @@ function renderMove(){
   document.getElementById('cnt-move').textContent=rows.length;
   const t=document.getElementById('tbl-move');
   const cols=[['symbol','Coin','txt'],['tetik','Tetik','txt'],['last','Fiyat'],['chgPct','24h %'],['dist_lo7','dist_lo7'],['quoteVol','24h hacim'],['funding','Funding']];
-  t.innerHTML='<thead><tr>'+cols.map(c=>`<th class="${c[2]==='txt'?'txt':''}">${c[1]}</th>`).join('')+'</tr></thead><tbody>'+
+  t.innerHTML='<thead><tr>'+cols.map(c=>`<th class="${c[2]==='txt'?'txt':''}">${c[1]}${infoIcon(c[0])}</th>`).join('')+'</tr></thead><tbody>'+
     (rows.length?rows.map(b=>`<tr>
       <td>${symLink(b.symbol)}${cmcLink(COINS.find(c=>c.symbol===b.symbol))}</td>
       <td class="txt">
@@ -700,9 +752,9 @@ function renderMove(){
 function thead(cols,tab){
   const st=sortState[tab];
   return '<thead><tr>'+cols.map(c=>{
-    if(c[0]==='venue'||c[0]==='act') return `<th class="${c[2]==='txt'?'txt':''}">${c[1]}</th>`;
+    if(c[0]==='venue'||c[0]==='act') return `<th class="${c[2]==='txt'?'txt':''}">${c[1]}${infoIcon(c[0])}</th>`;
     const arrow = st.col===c[0] ? (st.dir<0?' ▼':' ▲') : '';
-    return `<th class="${c[2]==='txt'?'txt':''}" onclick="headerClick('${tab}','${c[0]}')">${c[1]}${arrow}</th>`;
+    return `<th class="${c[2]==='txt'?'txt':''}" onclick="headerClick('${tab}','${c[0]}')">${c[1]}${arrow}${infoIcon(c[0])}</th>`;
   }).join('')+'</tr></thead>';
 }
 const emptyRow=n=>`<tr><td colspan="${n}" class="empty">Kayıt yok</td></tr>`;
@@ -732,6 +784,10 @@ applyHash();
 document.getElementById('btnRefresh').onclick=startRefresh;
 document.getElementById('btnTechRefresh').onclick=startTechRefresh;
 document.getElementById('btnLive').onclick=loadLive;
+
+// info penceresi: dışına (backdrop) tıkla → kapat · Esc → kapat
+document.getElementById('infoOverlay').addEventListener('click',e=>{ if(e.target.id==='infoOverlay') closeInfo(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeInfo(); });
 
 // ── init ──
 (async()=>{ await loadCoins(); await loadTech(); if(ADMIN){ pollStatus(); pollTechStatus(); } loadLive(); })();
