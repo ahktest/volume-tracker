@@ -113,17 +113,16 @@
           background:#1f2937;color:#93c5fd;font-size:10px;font-weight:700;font-style:normal;cursor:pointer;
           border:1px solid #374151;vertical-align:middle;margin-left:4px}
     .info:hover{background:#374151;color:#bfdbfe}
-    /* tıkla-aç info penceresi */
-    .info-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;
-                  justify-content:center;z-index:200;padding:20px}
-    .info-overlay.show{display:flex}
-    .info-box{background:#111827;border:1px solid #374151;border-radius:12px;max-width:460px;width:100%;
-              padding:18px 20px;position:relative;box-shadow:0 20px 60px rgba(0,0,0,.5)}
-    .info-box h3{color:#93c5fd;font-size:14px;margin-bottom:10px;padding-right:26px}
-    .info-box .txt{color:#d1d5db;font-size:13px;line-height:1.65;white-space:pre-line}
-    .info-box .x{position:absolute;top:10px;right:13px;background:none;border:none;color:#9ca3af;
-                 font-size:22px;cursor:pointer;line-height:1;padding:0}
-    .info-box .x:hover{color:#e5e7eb}
+    /* tıkla-aç küçük info penceresi (ikonun yanında belirir) */
+    .info-pop{position:fixed;z-index:200;display:none;max-width:300px;background:#0f172a;
+              border:1px solid #374151;border-radius:10px;padding:11px 13px;
+              box-shadow:0 10px 30px rgba(0,0,0,.55)}
+    .info-pop.show{display:block}
+    .info-pop h3{color:#93c5fd;font-size:12.5px;margin-bottom:6px;padding-right:18px}
+    .info-pop .txt{color:#d1d5db;font-size:12px;line-height:1.55;white-space:pre-line}
+    .info-pop .x{position:absolute;top:6px;right:9px;background:none;border:none;color:#9ca3af;
+                 font-size:16px;cursor:pointer;line-height:1;padding:0}
+    .info-pop .x:hover{color:#e5e7eb}
   </style>
 </head>
 <body>
@@ -238,13 +237,11 @@
   </div>
 </div>
 
-<!-- Tıkla-aç bilgi penceresi (başlık ⓘ'ları buraya doldurur) -->
-<div class="info-overlay" id="infoOverlay">
-  <div class="info-box">
-    <button class="x" onclick="closeInfo()" title="kapat">×</button>
-    <h3 id="infoTitle"></h3>
-    <div class="txt" id="infoText"></div>
-  </div>
+<!-- Tıkla-aç küçük bilgi penceresi (başlık ⓘ'ları buraya doldurur, ikonun yanında belirir) -->
+<div class="info-pop" id="infoPop">
+  <button class="x" onclick="closeInfo()" title="kapat">×</button>
+  <h3 id="infoTitle"></h3>
+  <div class="txt" id="infoText"></div>
 </div>
 
 <script>
@@ -287,14 +284,27 @@ const INFO = {
   fut_ath_age_days: { t:'ATH yaşı (gün)', d:'Futures zirvesinin (ATH) kaç gün önce yapıldığı.' },
   tetik: { t:'Tetik tipleri', d:'Hangi breakout koşulunun yandığı:\n\n🔥 KIRILIM = fiyat 20 günün en yüksek kapanışını %1 aştı VE 24h hacim 20g ortalamasının 1.5 katı üstünde.\n\nBAND = konsolidasyon üst bandını kırdı (fiyat > cons_mid × 1.30).\n\nHACİM = 24h hacim, baz hacmin (vol_base) 3 katı üstünde.\n\n24S % = 24 saatlik değişim ≥ %15.' },
 };
-function infoIcon(key){ return INFO[key] ? ` <span class="info" onclick="event.stopPropagation();openInfoKey('${key}')">i</span>` : ''; }
-function openInfoKey(key){
+function infoIcon(key){ return INFO[key] ? ` <span class="info" onclick="openInfoKey('${key}',event)">i</span>` : ''; }
+function openInfoKey(key,ev){
+  if(ev) ev.stopPropagation();   // sıralanabilir th'de sort tetiklenmesin
   const i=INFO[key]; if(!i) return;
   document.getElementById('infoTitle').textContent=i.t;
   document.getElementById('infoText').textContent=i.d;
-  document.getElementById('infoOverlay').classList.add('show');
+  const pop=document.getElementById('infoPop');
+  pop.classList.add('show');     // ölçüm için önce göster
+  // ikonun yanına konumla; ekran kenarına taşarsa içeri al
+  const icon=ev&&ev.currentTarget;
+  if(icon){
+    const r=icon.getBoundingClientRect(), w=pop.offsetWidth, h=pop.offsetHeight, pad=8;
+    let left=r.left, top=r.bottom+6;
+    if(left+w>innerWidth-pad) left=innerWidth-w-pad;
+    if(left<pad) left=pad;
+    if(top+h>innerHeight-pad) top=r.top-h-6;   // altına sığmazsa üstüne
+    if(top<pad) top=pad;
+    pop.style.left=left+'px'; pop.style.top=top+'px';
+  }
 }
-function closeInfo(){ document.getElementById('infoOverlay').classList.remove('show'); }
+function closeInfo(){ document.getElementById('infoPop').classList.remove('show'); }
 
 // ── helpers ──
 const N = v => (v===null||v===undefined||v==='') ? null : Number(v);
@@ -785,8 +795,12 @@ document.getElementById('btnRefresh').onclick=startRefresh;
 document.getElementById('btnTechRefresh').onclick=startTechRefresh;
 document.getElementById('btnLive').onclick=loadLive;
 
-// info penceresi: dışına (backdrop) tıkla → kapat · Esc → kapat
-document.getElementById('infoOverlay').addEventListener('click',e=>{ if(e.target.id==='infoOverlay') closeInfo(); });
+// info penceresi: dışına tıkla → kapat (ikonun onclick'i stopPropagation yaptığından
+// açan tıklama buraya gelmez) · Esc → kapat
+document.addEventListener('click',e=>{
+  const pop=document.getElementById('infoPop');
+  if(pop.classList.contains('show') && !pop.contains(e.target)) closeInfo();
+});
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeInfo(); });
 
 // ── init ──
