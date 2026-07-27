@@ -457,8 +457,10 @@ function rsiClass(v){ if(v===null)return 'muted'; if(v<=30)return 'pos'; if(v>=7
 
 // ── teknik sinyal durumları (coin_metrics kolonlarından türetilir) ──
 // ── teknik sinyal durumları — seçili zaman diliminin coin_tech_signals satırından ──
-// RSI: sekme filtresi zaten "yukarı kesiş" gerektirir -> pozitif.
-const rsiPos = t => N(t.rsi_cross_bars_ago)!==null;
+// RSI zayıf: yukarı kesti AMA şu an RSI ortalamasının ALTINDA (kesiş sonrası geri düşmüş).
+const rsiWeak = t => { const r=N(t.rsi14), m=N(t.rsi_ma); return r!==null && m!==null && r<m; };
+// RSI pozitif: yukarı kesiş var VE şu an ortalamasının altında değil (teyit ediyor).
+const rsiPos = t => N(t.rsi_cross_bars_ago)!==null && !rsiWeak(t);
 // Golden/Death: {gd, recent, bars, src}. null=MA200 hiç oluşmamış.
 // ma_source: MA hangi dilimden geldi (o dilimde MA200 yoksa günlükten devralınır) —
 // tazelik eşiği ve birim de o dilime göre seçilir.
@@ -493,7 +495,10 @@ function techBadges(t,meta){
   if(mc===null) mcB='<span class="sig muted" title="MACD için yetersiz geçmiş">MACD?</span>';
   else if(mc===1) mcB='<span class="sig pos" title="MACD 0 üzerinde (pozitif)">MACD↑</span>';
   else mcB='<span class="sig neg" title="MACD 0 altında (negatif)">MACD↓</span>';
-  return `<span class="sig pos" title="RSI aşırı satımdan yukarı kesiş">RSI↑</span>${maB}${mcB}`;
+  const rsiB = rsiWeak(t)
+    ? `<span class="sig muted" title="RSI yukarı kesti ama şu an ortalamasının ALTINDA (kesiş sonrası geri düştü, zayıf)">RSI↑</span>`
+    : `<span class="sig pos" title="RSI aşırı satımdan yukarı kesiş — ortalamasının üstünde">RSI↑</span>`;
+  return `${rsiB}${maB}${mcB}`;
 }
 
 // "Daha fazla yükle" durumu — sadece-RSI grubu açık mı
@@ -530,10 +535,12 @@ function renderTech(){
   //  0) Hareket başladı (RSI zaten pozitif, sekme filtresi garanti ediyor)
   //  1) Tam pozitif   : RSI + Golden Cross + MACD
   //  2) 2'li pozitif  : RSI + (GC ya da MACD)
-  //  3) Geri kalan    : sadece RSI — "daha fazla yükle" altında, RSI'ya göre sıralı
+  //  3) Geri kalan    : sadece RSI + RSI'sı kesiş sonrası ortalama altına düşmüş (zayıf) —
+  //                     "daha fazla yükle" altında, RSI'ya göre sıralı
   const moveSet=new Set((LIVE.breakouts||[]).map(b=>b.symbol));
   const tierOf=r=>{
     if(moveSet.has(r.symbol)) return 0;
+    if(rsiWeak(r)) return 3;   // kesiş sonrası RSI ortalamanın altına düşmüş → aşağı
     const g=maPos(r,meta), m=macdState(r)===1;
     return (g&&m) ? 1 : (g||m) ? 2 : 3;
   };
