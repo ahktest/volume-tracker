@@ -544,11 +544,10 @@ function renderTech(){
     const g=maPos(r,meta), m=macdState(r)===1;
     return (g&&m) ? 1 : (g||m) ? 2 : 3;
   };
+  // Tüm gruplar rows'un (sortState'e göre sıralanmış) sırasını miras alır → başlık tıklaması
+  // g3 dahil her grubu sıralar. (Önceden g3 RSI'ya sabitlenmişti, sıralamayı eziyordu.)
   const g0=rows.filter(r=>tierOf(r)===0), g1=rows.filter(r=>tierOf(r)===1),
-        g2=rows.filter(r=>tierOf(r)===2);
-  // geri kalanlar RSI durumuna göre (düşük RSI = daha aşırı satım, önce)
-  const g3=rows.filter(r=>tierOf(r)===3)
-    .sort((a,b)=>{const x=N(a.rsi14),y=N(b.rsi14); if(x===null)return 1; if(y===null)return -1; return x-y;});
+        g2=rows.filter(r=>tierOf(r)===2), g3=rows.filter(r=>tierOf(r)===3);
   document.getElementById('cnt-tech').textContent=rows.length;
 
   const cols=[['symbol','Coin','txt'],['venue','Venue','txt'],['rsi14','RSI'],['rsi_ma','RSI ort.'],['rsi_cross_bars_ago',`Kesişim (${unit} önce)`],['macd_hist','MACD hist'],['dist_lo7','dist_lo7'],['ret7d','7g %'],['mcap_usd','Mcap'],['max_magnitude','En büyük ×']];
