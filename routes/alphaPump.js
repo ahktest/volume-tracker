@@ -6,6 +6,7 @@ const refresh = require('../lib/refresh');
 const live = require('../lib/live');
 const cfg = require('../lib/config');
 const { computeRsi } = require('../lib/rsi');
+const { stochRsiSeries } = require('../lib/tech');
 
 module.exports = (pool) => {
   const router = express.Router();
@@ -82,7 +83,8 @@ module.exports = (pool) => {
       const [rows] = await pool.query(`
         SELECT t.symbol, t.timeframe, t.rsi14, t.rsi_ma, t.rsi_cross_bars_ago,
                t.ma50, t.ma200, t.ma_cross_bars_ago, t.ma_source,
-               t.macd, t.macd_signal, t.macd_hist, t.macd_cross_bars_ago, t.updated_at,
+               t.macd, t.macd_signal, t.macd_hist, t.macd_cross_bars_ago,
+               t.stoch_k, t.stoch_d, t.stoch_cross_bars_ago, t.updated_at,
                cm.dist_lo7, cm.ret7d, cm.ret30d, cm.consolidation_days, cm.last_price,
                cm.is_sleeping, cm.fut_ath_age_days,
                (cm.symbol IS NOT NULL) AS in_metrics,
@@ -268,11 +270,12 @@ module.exports = (pool) => {
           alphaKlines = raw.map(k => ({ t: +k[0], c: +k[4] }));
         } catch (e) { /* alpha yoksa boş */ }
       }
-      // RSI(14) + ortalaması (grafik alt-paneli) — futures kapanışlarından, klines ile hizalı
-      let rsi = [], rsiMa = [];
+      // RSI(14) + ortalaması + StochRSI (%K/%D) — grafik alt-panelleri, klines ile hizalı
+      let rsi = [], rsiMa = [], stochK = [], stochD = [];
       if (klines.length) {
-        const r = computeRsi(klines.map(k => k.c));
-        rsi = r.rsi; rsiMa = r.ma;
+        const closes = klines.map(k => k.c);
+        const r = computeRsi(closes); rsi = r.rsi; rsiMa = r.ma;
+        const s = stochRsiSeries(closes); stochK = s.k; stochD = s.d;
       }
       // Çoklu dilim teknik sinyalleri (bu coin için) — tech-only modda ana içerik
       let techRows = [];
@@ -280,7 +283,7 @@ module.exports = (pool) => {
         [techRows] = await pool.query(
           'SELECT * FROM coin_tech_signals WHERE symbol = ?', [symbol]);
       } catch (e) { /* tablo yoksa boş */ }
-      res.json({ metrics: metricsOut, techOnly, events, klines, alphaKlines, rsi, rsiMa, techRows });
+      res.json({ metrics: metricsOut, techOnly, events, klines, alphaKlines, rsi, rsiMa, stochK, stochD, techRows });
     } catch (err) {
       console.error('[pump/coin] hata:', err);
       res.status(500).json({ error: err.message });

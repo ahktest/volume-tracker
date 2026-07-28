@@ -38,6 +38,9 @@ CREATE TABLE IF NOT EXISTS coin_tech_signals (
   macd_signal         DECIMAL(38,18) NULL,
   macd_hist           DECIMAL(38,18) NULL,
   macd_cross_bars_ago INT           NULL,
+  stoch_k             DECIMAL(6,2)  NULL,
+  stoch_d             DECIMAL(6,2)  NULL,
+  stoch_cross_bars_ago INT          NULL,
   updated_at          DATETIME      NULL,
   PRIMARY KEY (symbol, timeframe),
   KEY idx_tf_rsi_cross (timeframe, rsi_cross_bars_ago)
@@ -62,7 +65,12 @@ CREATE TABLE IF NOT EXISTS coin_tech_signals (
     }
   }
   // Tablo önceki sürümde oluşturulmuşsa sonradan eklenen kolonlar (CREATE IF NOT EXISTS bunları eklemez)
-  for (const [name, def] of [['ma_source', "VARCHAR(8) NULL COMMENT 'MA kaynağı dilim'"]]) {
+  for (const [name, def] of [
+    ['ma_source', "VARCHAR(8) NULL COMMENT 'MA kaynağı dilim'"],
+    ['stoch_k', 'DECIMAL(6,2) NULL'],
+    ['stoch_d', 'DECIMAL(6,2) NULL'],
+    ['stoch_cross_bars_ago', 'INT NULL'],
+  ]) {
     try {
       await pool.query(`ALTER TABLE coin_tech_signals ADD COLUMN \`${name}\` ${def}`);
       console.log(`✓ eklendi: coin_tech_signals.${name}`);

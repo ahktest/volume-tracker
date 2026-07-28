@@ -202,6 +202,8 @@
       <label class="pill" title="Kesişimin en fazla kaç BAR önce olabileceği. 0 = son bar.">kesişim ≤ <span id="t_barUnit">bar</span> <input type="number" id="t_days" value="2" step="1" min="0" style="width:70px"></label>
       <label class="pill" title="RSI alt sınırı. Güncel RSI bu değerin altındakiler gizlenir. Boş = sınırsız.">min RSI <input type="number" id="t_rsi_min" value="" placeholder="—" style="width:70px"></label>
       <label class="pill" title="RSI üst sınırı. Güncel RSI bu değerin üstündekiler gizlenir. Boş = sınırsız.">max RSI <input type="number" id="t_rsi" value="" placeholder="—" style="width:70px"></label>
+      <label class="pill" title="StochRSI %K alt sınırı. Güncel %K bu değerin altındakiler gizlenir. Boş = sınırsız.">min Stoch <input type="number" id="t_stoch_min" value="" placeholder="—" style="width:70px"></label>
+      <label class="pill" title="StochRSI %K üst sınırı. Güncel %K bu değerin üstündekiler gizlenir. Boş = sınırsız. (ör. 10 → sadece aşırı satım)">max Stoch <input type="number" id="t_stoch_max" value="" placeholder="—" style="width:70px"></label>
       <label class="pill">alpha aşaması
         <select id="t_phase" style="width:auto">
           <option value="">hepsi</option>
@@ -278,6 +280,7 @@ const INFO = {
   rsi_ma: { t:'RSI ortalaması', d:'RSI\'nin hareketli ortalaması (14 SMA).\n\nRSI\'nin bu çizgiyi aşağıdan yukarı kesmesi, momentumun dönmeye başladığı sinyalidir.' },
   rsi_cross_bars_ago: { t:'Kesişim (kaç önce)', d:'RSI\'nin ortalamasını en son kaç BAR önce yukarı kestiği.\n\n0 = son bar / bugün. Birim seçili zaman dilimine göre değişir (gün / 4s bar / hafta).' },
   macd_hist: { t:'MACD histogram', d:'MACD çizgisi − sinyal çizgisi.\n\nPozitif (yeşil) = MACD sinyalin üstünde, boğa momentumu. MACD > 0 ayrıca sıfır çizgisinin üstünde demektir.' },
+  stoch_k: { t:'Stochastic RSI (%K)', d:'RSI\'nın son 14 barlık aralığında nerede olduğu (0-100). RSI\'dan daha hızlı/hassas momentum.\n\n≤10 (yeşil) = aşırı satım / alım bölgesi. ≥90 (kırmızı) = aşırı alım / satım bölgesi.\n\nSinyal: %K\'nın %D\'yi <10 bölgesinde yukarı kesmesi (dip dönüşü). Rozet ST↑ yeşil = taze kesiş ve %K ≥ %D; gri = kesti ama geri düşmüş.' },
   mcap_usd: { t:'Piyasa değeri', d:'Coinin dolar cinsinden piyasa değeri (market cap).' },
   max_magnitude: { t:'En büyük ×', d:'Bu coinin geçmişte yaptığı en büyük pump — dipten tepeye kaç kat.\n\n— = kayıtlı ≥9× pump yok.' },
   event_count: { t:'#Pump', d:'Bu coinin ≥9× (dipten tepeye) pump olay sayısı. Futures ve alpha ayrı sayılır.' },
@@ -454,6 +457,8 @@ function render(){ renderPumps(); renderSleep(); renderMove(); renderTech(); ren
 
 // RSI rengi: <=30 aşırı satım(yeşil) · >=70 aşırı alım(kırmızı) · arası nötr
 function rsiClass(v){ if(v===null)return 'muted'; if(v<=30)return 'pos'; if(v>=70)return 'neg'; return ''; }
+// StochRSI rengi: <=10 aşırı satım/alım-bölgesi(yeşil) · >=90 aşırı alım/satım-bölgesi(kırmızı)
+function stochClass(v){ if(v===null)return 'muted'; if(v<=10)return 'pos'; if(v>=90)return 'neg'; return ''; }
 
 // ── teknik sinyal durumları (coin_metrics kolonlarından türetilir) ──
 // ── teknik sinyal durumları — seçili zaman diliminin coin_tech_signals satırından ──
@@ -473,8 +478,12 @@ const unitOf = tf => tf==='1d' ? 'g' : tf==='1w' ? 'hf' : 'bar';
 const maPos = (t,meta) => { const m=maState(t,meta); return m!==null && m.gd===1 && m.recent; };
 // MACD pozitif: macd çizgisi 0'ın üzerinde. null=yetersiz geçmiş.
 function macdState(t){ const v=N(t.macd); if(v===null) return null; return v>0?1:-1; }
-// Hepsi pozitif: RSI↑ + taze golden cross + MACD>0
-const allPositive = (t,meta) => rsiPos(t) && maPos(t,meta) && macdState(t)===1;
+// StochRSI zayıf: %K şu an %D'nin altında (kesiş sonrası geri düşmüş).
+const stochWeak = t => { const k=N(t.stoch_k), d=N(t.stoch_d); return k!==null && d!==null && k<d; };
+// StochRSI pozitif: aşırı satımda (<10) taze %K/%D yukarı kesişi VE şu an %K ≥ %D.
+const stochPos = (t,meta) => { const b=N(t.stoch_cross_bars_ago); return b!==null && b<=meta.rsiCrossMaxBars && !stochWeak(t); };
+// Hepsi pozitif: RSI↑ + taze golden cross + MACD>0 + StochRSI↑
+const allPositive = (t,meta) => rsiPos(t) && maPos(t,meta) && macdState(t)===1 && stochPos(t,meta);
 
 // kontrol edilen araç rozetleri (coin yanı)
 function techBadges(t,meta){
@@ -498,7 +507,14 @@ function techBadges(t,meta){
   const rsiB = rsiWeak(t)
     ? `<span class="sig muted" title="RSI yukarı kesti ama şu an ortalamasının ALTINDA (kesiş sonrası geri düştü, zayıf)">RSI↑</span>`
     : `<span class="sig pos" title="RSI aşırı satımdan yukarı kesiş — ortalamasının üstünde">RSI↑</span>`;
-  return `${rsiB}${maB}${mcB}`;
+  // StochRSI rozeti
+  let stB;
+  const sb=N(t.stoch_cross_bars_ago), sk=N(t.stoch_k), sd=N(t.stoch_d);
+  if(sk===null||sd===null) stB='<span class="sig muted" title="StochRSI için yetersiz geçmiş">ST?</span>';
+  else if(stochPos(t,meta)) stB='<span class="sig pos" title="StochRSI aşırı satımda (<10) %K yukarı kesti — ort. üstünde">ST↑</span>';
+  else if(sb!==null && stochWeak(t)) stB='<span class="sig muted" title="StochRSI aşırı satımda kesti ama %K şu an %D altında (zayıf)">ST↑</span>';
+  else stB='<span class="sig muted" title="StochRSI: taze aşırı satım kesişi yok">ST</span>';
+  return `${rsiB}${maB}${mcB}${stB}`;
 }
 
 // "Daha fazla yükle" durumu — sadece-RSI grubu açık mı
@@ -515,6 +531,8 @@ function renderTech(){
   document.getElementById('techMaxDays').textContent=mb;
   const minRsi=N(document.getElementById('t_rsi_min').value);
   const maxRsi=N(document.getElementById('t_rsi').value);
+  const minStoch=N(document.getElementById('t_stoch_min').value);
+  const maxStoch=N(document.getElementById('t_stoch_max').value);
   const onlyAll=document.getElementById('t_allpos').checked;
 
   // Teknik Takip kendi evreninde (tüm futures) çalışır — /tech satırları COINS'e bağımlı değil
@@ -528,37 +546,38 @@ function renderTech(){
   rows=rows.filter(r=>passPhase(r,document.getElementById('t_phase').value));
   if(minRsi!==null) rows=rows.filter(r=>N(r.rsi14)!==null && N(r.rsi14)>=minRsi);
   if(maxRsi!==null) rows=rows.filter(r=>N(r.rsi14)!==null && N(r.rsi14)<=maxRsi);
+  if(minStoch!==null) rows=rows.filter(r=>N(r.stoch_k)!==null && N(r.stoch_k)>=minStoch);
+  if(maxStoch!==null) rows=rows.filter(r=>N(r.stoch_k)!==null && N(r.stoch_k)<=maxStoch);
   if(onlyAll) rows=rows.filter(r=>allPositive(r,meta));
   rows=sortRows(rows,'rsi_cross_bars_ago','tech');
 
-  // ── Kademeli sıralama ──
-  //  0) Hareket başladı (RSI zaten pozitif, sekme filtresi garanti ediyor)
-  //  1) Tam pozitif   : RSI + Golden Cross + MACD
-  //  2) 2'li pozitif  : RSI + (GC ya da MACD)
-  //  3) Geri kalan    : sadece RSI + RSI'sı kesiş sonrası ortalama altına düşmüş (zayıf) —
-  //                     "daha fazla yükle" altında, RSI'ya göre sıralı
+  // ── Kademeli sıralama (3 opsiyonel sinyal: Golden / MACD / StochRSI) ──
+  //  0) Hareket başladı
+  //  1) Tam pozitif : RSI↑ + Golden + MACD + StochRSI (üçü de pozitif)
+  //  2) Kısmi pozitif: üçünden en az biri pozitif
+  //  3) Geri kalan   : hiçbiri pozitif değil VEYA RSI zayıf → "daha fazla yükle"
   const moveSet=new Set((LIVE.breakouts||[]).map(b=>b.symbol));
+  const posCount=r=>(maPos(r,meta)?1:0)+(macdState(r)===1?1:0)+(stochPos(r,meta)?1:0);
   const tierOf=r=>{
     if(moveSet.has(r.symbol)) return 0;
     if(rsiWeak(r)) return 3;   // kesiş sonrası RSI ortalamanın altına düşmüş → aşağı
-    const g=maPos(r,meta), m=macdState(r)===1;
-    return (g&&m) ? 1 : (g||m) ? 2 : 3;
+    const c=posCount(r);
+    return c===3 ? 1 : c>=1 ? 2 : 3;
   };
   // Tüm gruplar rows'un (sortState'e göre sıralanmış) sırasını miras alır → başlık tıklaması
-  // g3 dahil her grubu sıralar. (Önceden g3 RSI'ya sabitlenmişti, sıralamayı eziyordu.)
+  // g3 dahil her grubu sıralar.
   const g0=rows.filter(r=>tierOf(r)===0), g1=rows.filter(r=>tierOf(r)===1),
         g2=rows.filter(r=>tierOf(r)===2), g3=rows.filter(r=>tierOf(r)===3);
   document.getElementById('cnt-tech').textContent=rows.length;
 
-  const cols=[['symbol','Coin','txt'],['venue','Venue','txt'],['rsi14','RSI'],['rsi_ma','RSI ort.'],['rsi_cross_bars_ago',`Kesişim (${unit} önce)`],['macd_hist','MACD hist'],['dist_lo7','dist_lo7'],['ret7d','7g %'],['mcap_usd','Mcap'],['max_magnitude','En büyük ×']];
+  const cols=[['symbol','Coin','txt'],['venue','Venue','txt'],['rsi14','RSI'],['rsi_ma','RSI ort.'],['rsi_cross_bars_ago',`Kesişim (${unit} önce)`],['macd_hist','MACD hist'],['stoch_k','Stoch'],['dist_lo7','dist_lo7'],['ret7d','7g %'],['mcap_usd','Mcap'],['max_magnitude','En büyük ×']];
   const NC=cols.length;
 
   const rowHtml=(r,tier)=>{
-    const dist=N(r.dist_lo7), rsi=N(r.rsi14), d=N(r.rsi_cross_bars_ago), h=N(r.macd_hist);
-    const which = maPos(r,meta) ? 'RSI + Golden Cross' : 'RSI + MACD';
+    const dist=N(r.dist_lo7), rsi=N(r.rsi14), d=N(r.rsi_cross_bars_ago), h=N(r.macd_hist), sk=N(r.stoch_k);
     const tag = tier===0 ? ' <span class="movetag" title="Bu coin \'Hareket başladı\' sekmesinde de yanıyor">🚀 hareket başladı</span>'
-              : tier===1 ? ' <span class="postag" title="Tüm teknik sinyaller pozitif: RSI↑ + Golden Cross + MACD boğa">★ tam pozitif</span>'
-              : tier===2 ? ` <span class="duotag" title="İki sinyal pozitif: ${which}">◆ ${which}</span>` : '';
+              : tier===1 ? ' <span class="postag" title="Tüm teknik sinyaller pozitif: RSI↑ + Golden Cross + MACD boğa + StochRSI↑">★ tam pozitif</span>'
+              : tier===2 ? ` <span class="duotag" title="Golden / MACD / StochRSI'dan ${posCount(r)}\'i pozitif">◆ ${posCount(r)}/3 pozitif</span>` : '';
     const cl = tier===0?'movehit':tier===1?'allpos':tier===2?'duopos':'';
     return `<tr class="${cl}">
     <td>${symLink(r.symbol)}${cmcLink(r)} ${techBadges(r,meta)}${tag}</td>
@@ -567,6 +586,7 @@ function renderTech(){
     <td>${r.rsi_ma!==null&&r.rsi_ma!==undefined?fmtN(N(r.rsi_ma),1):'—'}</td>
     <td>${d===0?`<span class="fire">${curTF==='1d'?'bugün':'son bar'}</span>`:d+unit}</td>
     <td class="${cls(h)}">${h!==null?fmtN(h,4):'—'}</td>
+    <td class="${stochClass(sk)}">${sk!==null?fmtN(sk,0):'—'}</td>
     <td class="${cls(dist)}">${dist!==null?fmtN(dist,1)+'%':'—'}</td>
     <td class="${cls(N(r.ret7d))}">${fmtPct(N(r.ret7d))}</td>
     <td>${fmtMcap(r.mcap_usd)}</td>
@@ -577,7 +597,7 @@ function renderTech(){
   let body='';
   if(g0.length) body+=groupHead('🚀 Hareket başladı',g0.length)+g0.map(r=>rowHtml(r,0)).join('');
   if(g1.length) body+=groupHead('★ Tam pozitif',g1.length)+g1.map(r=>rowHtml(r,1)).join('');
-  if(g2.length) body+=groupHead("◆ 2'li pozitif",g2.length)+g2.map(r=>rowHtml(r,2)).join('');
+  if(g2.length) body+=groupHead('◆ Kısmi pozitif (Golden/MACD/Stoch)',g2.length)+g2.map(r=>rowHtml(r,2)).join('');
   if(g3.length){
     if(techShowRest) body+=groupHead('RSI sinyali (RSI\'ya göre)',g3.length)+g3.map(r=>rowHtml(r,3)).join('');
     else body+=`<tr class="morerow"><td colspan="${NC}"><button class="morebtn" onclick="techLoadMore()">↓ Daha fazla yükle — ${g3.length} coin (sadece RSI sinyali)</button></td></tr>`;
@@ -795,7 +815,7 @@ window.addEventListener('hashchange',applyHash);
 applyHash();
 ['f_mag','f_phase','f_upbit','f_bybit','f_nonlisting'].forEach(id=>document.getElementById(id).addEventListener('input',renderPumps));
 ['s_cons','s_dist','s_mcap','s_phase'].forEach(id=>document.getElementById(id).addEventListener('input',renderSleep));
-['t_days','t_rsi_min','t_rsi','t_phase','t_allpos','t_universe'].forEach(id=>document.getElementById(id).addEventListener('input',renderTech));
+['t_days','t_rsi_min','t_rsi','t_stoch_min','t_stoch_max','t_phase','t_allpos','t_universe'].forEach(id=>document.getElementById(id).addEventListener('input',renderTech));
 ['a_search','a_universe'].forEach(id=>document.getElementById(id).addEventListener('input',renderAll));
 document.getElementById('btnRefresh').onclick=startRefresh;
 document.getElementById('btnTechRefresh').onclick=startTechRefresh;

@@ -112,6 +112,14 @@
     <div class="chart-wrap" style="height:220px"><canvas id="rsiChart"></canvas></div>
   </div>
 
+  <div class="card" id="stochCard" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px">
+      <h2 style="margin:0">Stochastic RSI (14,14,3,3) <span id="stochNow" class="muted" style="font-weight:400;font-size:12px"></span></h2>
+      <span class="muted" style="font-size:11px">mor: %K · turuncu: %D · aşırı satım 10 / aşırı alım 90</span>
+    </div>
+    <div class="chart-wrap" style="height:200px"><canvas id="stochChart"></canvas></div>
+  </div>
+
   <div class="card" id="llCard" style="display:none">
     <h2>Futures ↔ Alpha ilişkisi (lead-lag)</h2>
     <div id="llVerdict" style="margin-bottom:12px"></div>
@@ -134,7 +142,7 @@
 <script>
 const API='/api/pump';
 const symbol=(new URLSearchParams(location.search).get('symbol')||'').toUpperCase();
-let chart, rsiChart;
+let chart, rsiChart, stochChart;
 // admin modu (güncelle butonu gizle) — pump.html?admin=ahktest ile açılır, aynı localStorage
 if(localStorage.getItem('pumpAdmin')==='1') document.body.classList.add('admin');
 document.addEventListener('DOMContentLoaded',()=>{ const b=document.getElementById('zoomReset'); if(b) b.onclick=()=>chart&&chart.resetZoom(); });
@@ -188,6 +196,7 @@ function render(d){
 
   renderChart(d,m);
   renderRsi(d);
+  renderStoch(d);
   renderTechSignals(d);
   // tech-only'de pump geçmişi kartı anlamsız (evren dışı, pump_events yok);
   // "bu coini güncelle" de çalışmaz (pump evreninde değil) → gizle
@@ -253,6 +262,30 @@ function renderRsi(d){
               y:{min:0,max:100,ticks:{color:'#6b7280',stepSize:20},grid:{color:'#1a2332'}}}}});
 }
 
+function renderStoch(d){
+  const card=document.getElementById('stochCard');
+  const klines=d.klines||[], k=d.stochK||[], dd=d.stochD||[];
+  if(!klines.length || !k.length){ card.style.display='none'; return; }
+  card.style.display='';
+  const labels=klines.map(x=>dayStr(x.t));
+  const line=(v,color)=>({label:'',data:labels.map(()=>v),borderColor:color,borderWidth:1,borderDash:[4,4],pointRadius:0,fill:false});
+  const lastK=[...k].reverse().find(v=>v!=null), lastD=[...dd].reverse().find(v=>v!=null);
+  document.getElementById('stochNow').textContent =
+    (lastK!=null?`· %K ${lastK.toFixed(0)}`:'') + (lastD!=null?` · %D ${lastD.toFixed(0)}`:'');
+  const ds=[
+    {label:'%K',data:k,borderColor:'#a78bfa',borderWidth:1.3,pointRadius:0,fill:false,tension:.1,spanGaps:true},
+    {label:'%D',data:dd,borderColor:'#fb923c',borderWidth:1.6,pointRadius:0,fill:false,tension:.15,spanGaps:true},
+    line(90,'#f8717155'), line(10,'#34d39955'),
+  ];
+  if(stochChart)stochChart.destroy();
+  stochChart=new Chart(document.getElementById('stochChart'),{type:'line',data:{labels,datasets:ds},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{intersect:false,mode:'index'},
+      plugins:{legend:{labels:{color:'#9ca3af',boxWidth:12,font:{size:11},filter:i=>i.text}},
+        zoom:{zoom:{wheel:{enabled:true},pinch:{enabled:true},drag:{enabled:true,modifierKey:'shift',backgroundColor:'rgba(96,165,250,.15)'},mode:'x'},pan:{enabled:true,mode:'x'}}},
+      scales:{x:{ticks:{color:'#6b7280',maxTicksLimit:8},grid:{color:'#1a2332'}},
+              y:{min:0,max:100,ticks:{color:'#6b7280',stepSize:20},grid:{color:'#1a2332'}}}}});
+}
+
 // ── Teknik sinyaller (1d / 4h / 1w) ──
 const TF_LABEL={'1d':'Günlük','4h':'4 Saat','1w':'Haftalık'};
 const TF_ORDER=['1d','4h','1w'];
@@ -262,9 +295,16 @@ function renderTechSignals(d){
   const rows=(d.techRows||[]).slice().sort((a,b)=>TF_ORDER.indexOf(a.timeframe)-TF_ORDER.indexOf(b.timeframe));
   if(!rows.length){ card.style.display='none'; return; }
   card.style.display='';
-  const head='<thead><tr><th>Dilim</th><th>RSI</th><th>RSI ort.</th><th>Kesişim</th><th>MA</th><th>MACD</th></tr></thead>';
+  const head='<thead><tr><th>Dilim</th><th>RSI</th><th>RSI ort.</th><th>Kesişim</th><th>MA</th><th>MACD</th><th>Stoch %K/%D</th></tr></thead>';
   document.getElementById('techTbl').innerHTML=head+'<tbody>'+rows.map(r=>{
     const rsi=N(r.rsi14), rma=N(r.rsi_ma), rb=N(r.rsi_cross_bars_ago);
+    const sk=N(r.stoch_k), sd=N(r.stoch_d), sb=N(r.stoch_cross_bars_ago);
+    let stTxt='<span class="muted">—</span>';
+    if(sk!==null&&sd!==null){
+      const scls = sk<=10?'pos':sk>=90?'neg':'';
+      stTxt=`<span class="${scls}">${sk.toFixed(0)}</span><span class="muted">/${sd.toFixed(0)}</span>`
+           +(sb!==null?` <span class="pos">↑${sb}${tfUnit(r.timeframe)}</span>`:'');
+    }
     const f=N(r.ma50), s=N(r.ma200), mb=N(r.ma_cross_bars_ago);
     const src=r.ma_source||r.timeframe, inh=src!==r.timeframe;
     let maTxt='<span class="muted">—</span>';
@@ -283,6 +323,7 @@ function renderTechSignals(d){
       <td>${rb!==null?rb+tfUnit(r.timeframe)+' önce':'<span class="muted">—</span>'}</td>
       <td>${maTxt}</td>
       <td>${mcTxt}</td>
+      <td>${stTxt}</td>
     </tr>`;
   }).join('')+'</tbody>';
 }
