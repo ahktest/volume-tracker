@@ -155,7 +155,8 @@
       <div class="holders-grid">
         <div>
           <div class="hsub">Konsantrasyon</div>
-          <div class="conc-wrap"><canvas id="concChart"></canvas></div>
+          <div class="conc-wrap" id="concWrap"><canvas id="concChart"></canvas></div>
+          <div id="concEmpty" class="empty" style="display:none"></div>
         </div>
         <div id="cohortPanel">
           <div class="hsub">Kohort dökümü</div>
@@ -341,7 +342,17 @@ function renderHolders(h){
 function renderConcChart(conc){
   const el=document.getElementById('concChart');
   if(concChart) concChart.destroy();
-  if(!conc.length){ el.parentElement.innerHTML='<div class="empty">veri yok</div>'; return; }
+  // Değerler boş/0 ise Chart.js hiçbir dilim çizmez ve sadece legend görünür — bu bir kez
+  // gerçek bir bug'ı (kohort value'ları null) sessizce gizledi. Artık açıkça söyle.
+  const total=conc.reduce((s,c)=>s+(Number(c.value)||0),0);
+  const wrap=document.getElementById('concWrap'), empty=document.getElementById('concEmpty');
+  // Boş durumda canvas'ı DOM'dan silme — "Tekrar çek" sonrası tekrar çizilebilmeli.
+  if(!conc.length || !(total>0)){
+    wrap.style.display='none'; empty.style.display='';
+    empty.textContent='konsantrasyon verisi hesaplanamadı';
+    return;
+  }
+  wrap.style.display=''; empty.style.display='none';
   concChart=new Chart(el,{type:'doughnut',
     data:{labels:conc.map(c=>c.name),
       datasets:[{data:conc.map(c=>Number(c.value)||0),
