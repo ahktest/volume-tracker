@@ -236,9 +236,15 @@ module.exports = (pool) => {
       const result = await holderScrape.scrapeOne(pool, req.params.symbol.toUpperCase());
       res.json(result);
     } catch (err) {
+      const status = err.status || 500;
+      // 400/409/429 normal akış (yanlış zincir, kilit, cooldown) — gürültü yapma.
+      // 5xx gerçek arıza: explorer engeli, sayfa yapısı değişikliği vs. → logla.
+      if (status >= 500) {
+        console.error(`[pump/holders] ${req.params.symbol.toUpperCase()} hata:`, err.message);
+      }
       // scrape edilemeyen zincirde (Solana/Sui/Linea) explorer linkini de döndür ki
       // frontend "Explorer'da aç" butonuna düşebilsin
-      res.status(err.status || 500).json({
+      res.status(status).json({
         error: err.message,
         explorerUrl: err.explorerUrl || null,
         chain: err.chain || null,
