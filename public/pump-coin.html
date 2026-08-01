@@ -67,7 +67,10 @@
     .tag-listing{background:#4b556333;color:#9ca3af}
     .tag-m-futures{background:#2563eb33;color:#93c5fd}.tag-m-alpha{background:#7c3aed33;color:#c4b5fd}
     /* Holder dağılımı */
-    .holders-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}
+    .holders-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;align-items:start}
+    /* Donut'un kabı sütun genişliğine yayılmamalı: Chart.js yarıçapı min(en,boy)'a göre
+       hesaplar, sütun 1000px olunca donut 230px'te kalıp devasa boşlukta kayboluyordu. */
+    .conc-wrap{height:230px;max-width:280px;margin:0 auto}
     .hsub{font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
     .kind{font-size:10px;font-weight:700;border-radius:4px;padding:1px 6px;margin-left:5px}
     .k-cex{background:#ea580c33;color:#fdba74}.k-pool{background:#2563eb33;color:#93c5fd}
@@ -152,7 +155,11 @@
       <div class="holders-grid">
         <div>
           <div class="hsub">Konsantrasyon</div>
-          <div style="height:230px"><canvas id="concChart"></canvas></div>
+          <div class="conc-wrap"><canvas id="concChart"></canvas></div>
+        </div>
+        <div id="cohortPanel">
+          <div class="hsub">Kohort dökümü</div>
+          <table id="cohortTbl"></table>
         </div>
         <div id="tiersPanel" style="display:none">
           <div class="hsub">Tier dağılımı</div>
@@ -261,7 +268,7 @@ const RISK_LABEL={dusuk:'DÜŞÜK',orta:'ORTA',yuksek:'YÜKSEK',cok_yuksek:'ÇOK
 const KIND_LABEL={cex:'CEX',pool:'HAVUZ',burn:'BURN',other:'KURUMSAL'};
 const FLAG_LABEL={tek_cuzdan_hakim:'tek cüzdan hâkim',az_gercek_holder:'az gerçek holder',
   kilitli_arz:'arzın çoğu kilitli',temiz_top5_eksik:'ilk sıraların çoğu etiketli',
-  etiket_yok:'etiket verisi alınamadı'};
+  etiket_yok:'etiket verisi alınamadı',arz_tutarsiz:'arz verisi tutarsız — oranlar şişkin olabilir'};
 const pct1=v=>(v===null||v===undefined||!isFinite(v))?'—':Number(v).toFixed(1)+'%';
 const shortAddr=a=>a&&a.length>14?a.slice(0,6)+'…'+a.slice(-4):(a||'');
 
@@ -317,6 +324,7 @@ function renderHolders(h){
     (flags.length?`<div class="kpi"><div class="label">Bayraklar</div><div class="value" style="font-size:12px;color:#fbbf24">${flags.map(f=>FLAG_LABEL[f]||f).join(', ')}</div></div>`:'');
 
   renderConcChart(d.concentration||[]);
+  renderCohortTable(d.concentration||[]);
   // Tier dağılımı ve cüzdan derinliği ilk 100'den hesaplanamaz (tüm holder seti gerekir) →
   // Chainbase kaynağında bu iki panel gizli kalır; veri gelirse kendiliğinden açılır.
   const tiers=d.tiers||[], depth=d.depth||[];
@@ -344,6 +352,23 @@ function renderConcChart(conc){
           const r=conc[c.dataIndex];
           return ` ${r.name}: ${Number(r.value).toFixed(2)}%` + (r.amountLabel?` (${String(r.amountLabel).trim()})`:'');
         }}}}}});
+}
+
+// Donut'un yanındaki döküm — dilim renkleriyle eşleşir, kümülatif oranı da gösterir.
+// (Tier/derinlik panelleri Chainbase'de boş kaldığı için o alanı bu doldurur.)
+function renderCohortTable(conc){
+  const t=document.getElementById('cohortTbl');
+  document.getElementById('cohortPanel').style.display = conc.length?'':'none';
+  if(!conc.length) return;
+  let acc=0;
+  t.innerHTML='<thead><tr><th>Kohort</th><th>Pay</th><th>Kümülatif</th><th>Değer</th></tr></thead><tbody>'+
+    conc.map(c=>{
+      acc+=Number(c.value)||0;
+      const dot=`<span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${c.color||'#4b5563'};margin-right:7px"></span>`;
+      return `<tr><td style="text-align:left">${dot}${c.name}</td>`+
+             `<td>${pct1(N(c.value))}</td><td class="muted">${pct1(acc)}</td>`+
+             `<td class="muted">${c.amountLabel||'—'}</td></tr>`;
+    }).join('')+'</tbody>';
 }
 
 function renderTiers(tiers){
