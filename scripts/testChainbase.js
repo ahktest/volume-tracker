@@ -66,10 +66,19 @@ async function cb(path, params) {
     ? 'limitten BÜYÜK: toplam holder sayısı olarak kullanılabilir ✓'
     : 'limite eşit/küçük: TOPLAM DEĞİL, holders_total null bırakılacak'}`);
   console.log('alanlar:', Object.keys(rows[0] || {}));
+  const price = Number(t.price || 0);
+  const usdOf = x => (Number(x.usd_value) || 0) > 0 ? Number(x.usd_value) : (price > 0 ? Number(x.amount) * price : null);
   console.log('ilk 3:');
   for (const x of rows.slice(0, 3)) {
-    console.log(`  ${x.wallet_address}  amount=${x.amount}  usd=${x.usd_value}`);
+    console.log(`  ${x.wallet_address}  amount=${x.amount}  usd_value=${x.usd_value}  → kullanılan USD=${usdOf(x) == null ? 'YOK' : '$' + Math.round(usdOf(x)).toLocaleString('tr-TR')}`);
   }
+  // Chainbase'in usd_value'su boş gelebiliyor (CYS/BSC'de 100/100 sıfırdı) → fiyattan hesaplanır
+  const zeros = rows.filter(x => !(Number(x.usd_value) > 0)).length;
+  console.log(`\nusd_value boş/sıfır: ${zeros}/${rows.length}` +
+    (zeros ? `  → alpha listesi fiyatından hesaplanacak (price=${price || 'YOK'})` : ''));
+  const over1k = rows.filter(x => (usdOf(x) || 0) >= 1000).length;
+  console.log(`$1.000+ cüzdan (ilk ${rows.length} içinde): ${over1k}${over1k >= rows.length ? ' (tavan)' : ''}`);
+  if (!price && zeros) console.log('  ✗ fiyat da yok → wallets_over_1k null kalır, bayrak basılmaz');
 
   // ── Yüzde tutarlılığı ──
   const sum = rows.reduce((s, x) => s + (Number(x.amount) || 0), 0);
@@ -81,13 +90,21 @@ async function cb(path, params) {
     : '  ✗ TUTARSIZ: ilk 100 toplam arzı aşıyor → amount birimi ya da totalSupply hatalı!');
 
   // ── 2) labels ──
-  console.log('\n── /v1/address/labels (ilk 3 cüzdan) ──');
+  // CANLI TESTTE 3/3 boş (`data:{}`) döndü → cfg.CHAINBASE_LABEL_TOP_N=0 ile kapatıldı.
+  // Burada yine de yoklanır: bir gün dolu gelmeye başlarsa ayarı açmak yeterli.
+  console.log(`\n── /v1/address/labels (ilk 3 cüzdan) · üretimde ${cfg.CHAINBASE_LABEL_TOP_N ? 'AÇIK' : 'KAPALI'} ──`);
+  let labelHit = 0;
   for (const x of rows.slice(0, 3)) {
     const lr = await cb('/v1/address/labels', { chain_id: chainId, address: x.wallet_address });
-    console.log(`${x.wallet_address.slice(0, 10)}… HTTP ${lr.status} code=${lr.data && lr.data.code}`);
-    console.log(`   data: ${JSON.stringify(lr.data && lr.data.data).slice(0, 220)}`);
+    const d = lr.data && lr.data.data;
+    const empty = !d || (typeof d === 'object' && !Object.keys(d).length);
+    if (!empty) labelHit++;
+    console.log(`${x.wallet_address.slice(0, 10)}… HTTP ${lr.status} code=${lr.data && lr.data.code} ${empty ? '(BOŞ)' : ''}`);
+    console.log(`   data: ${JSON.stringify(d).slice(0, 220)}`);
     await new Promise(s => setTimeout(s, 400));
   }
+  if (labelHit && !cfg.CHAINBASE_LABEL_TOP_N)
+    console.log(`  → ${labelHit}/3 etiket DOLU geldi: config'de CHAINBASE_LABEL_TOP_N=10 yapmaya değer.`);
 
   // ── 3) DexScreener havuzları ──
   console.log('\n── DexScreener havuz adresleri ──');
