@@ -66,6 +66,17 @@
     .tag-guclu{background:#dc262633;color:#fca5a5}.tag-yavas{background:#3b82f633;color:#93c5fd}.tag-slow{background:#f59e0b33;color:#fbbf24}
     .tag-listing{background:#4b556333;color:#9ca3af}
     .tag-m-futures{background:#2563eb33;color:#93c5fd}.tag-m-alpha{background:#7c3aed33;color:#c4b5fd}
+    /* Holder dağılımı */
+    .holders-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}
+    .hsub{font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+    .kind{font-size:10px;font-weight:700;border-radius:4px;padding:1px 6px;margin-left:5px}
+    .k-cex{background:#ea580c33;color:#fdba74}.k-pool{background:#2563eb33;color:#93c5fd}
+    .k-burn{background:#4b556333;color:#9ca3af}.k-other{background:#7c3aed33;color:#c4b5fd}
+    .risk{font-size:11px;font-weight:700;border-radius:5px;padding:2px 8px}
+    .r-dusuk{background:#05966933;color:#6ee7b7}.r-orta{background:#f59e0b33;color:#fbbf24}
+    .r-yuksek{background:#ea580c33;color:#fdba74}.r-cok_yuksek{background:#dc262633;color:#fca5a5}
+    .addr{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#93c5fd;text-decoration:none}
+    .addr:hover{text-decoration:underline}
     .empty{padding:30px;text-align:center;color:#6b7280}
     #err{color:#f87171;padding:20px;text-align:center;display:none}
   </style>
@@ -125,6 +136,40 @@
     <div id="llVerdict" style="margin-bottom:12px"></div>
     <div class="kpi-row" id="llStats"></div>
     <div class="muted" style="margin-top:10px;font-size:11px">Günlük kapanışlardan hesaplanır; aynı varlığın iki borsası olduğundan sinyaller yakındır — heuristik.</div>
+  </div>
+
+  <div class="card" id="holdersCard" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap">
+      <h2 style="margin:0">Holder dağılımı <span id="holdersMeta" class="muted" style="font-weight:400;font-size:11px"></span></h2>
+      <div style="display:flex;gap:8px;align-items:center">
+        <a id="holdersLink" class="cmc" href="#" target="_blank" rel="noopener" style="display:none">Explorer'da aç ↗</a>
+        <button class="btn admin-only" id="btnHolders" style="display:none">🔍 Holder verisi çek</button>
+      </div>
+    </div>
+    <div id="holdersEmpty" class="empty" style="display:none"></div>
+    <div id="holdersBody" style="display:none">
+      <div class="kpi-row" id="holdersKpis"></div>
+      <div class="holders-grid">
+        <div>
+          <div class="hsub">Konsantrasyon</div>
+          <div style="height:230px"><canvas id="concChart"></canvas></div>
+        </div>
+        <div>
+          <div class="hsub">Tier dağılımı</div>
+          <table id="tiersTbl"></table>
+        </div>
+        <div>
+          <div class="hsub">Cüzdan derinliği</div>
+          <div style="height:230px"><canvas id="depthChart"></canvas></div>
+        </div>
+      </div>
+      <div class="hsub" style="margin-top:16px">En büyük 25 cüzdan</div>
+      <table id="topHoldersTbl"></table>
+      <div class="muted" style="margin-top:10px;font-size:11px">
+        Ham "ilk 5" oranına borsa cüzdanları, likidite havuzları ve proje/vesting adresleri de dahildir.
+        <strong>Temiz ilk 5</strong> bunları düşer — asıl konsantrasyon ölçüsü odur.
+      </div>
+    </div>
   </div>
 
   <div class="card" id="techCard" style="display:none">
@@ -203,8 +248,143 @@ function render(d){
   document.getElementById('eventsCard').style.display = techOnly ? 'none' : '';
   if(techOnly) document.getElementById('btnRefresh').style.display='none';
   renderLeadLag(d);
+  renderHolders(d.holders);
   renderEvents(d.events);
 }
+
+// ── Holder dağılımı ──
+// Veri varsa herkese görünür; çekme butonu yalnız admin'de. Scrape edilemeyen
+// zincirlerde (Solana/Sui/Linea) hiç istek atılmaz, sadece explorer linki gösterilir.
+let concChart, depthChart;
+const RISK_LABEL={dusuk:'DÜŞÜK',orta:'ORTA',yuksek:'YÜKSEK',cok_yuksek:'ÇOK YÜKSEK'};
+const KIND_LABEL={cex:'CEX',pool:'HAVUZ',burn:'BURN',other:'KURUMSAL'};
+const FLAG_LABEL={tek_cuzdan_hakim:'tek cüzdan hâkim',az_gercek_holder:'az gerçek holder',
+  dusuk_likidite:'düşük likidite',temiz_top5_eksik:'top25’in çoğu etiketli'};
+const pct1=v=>(v===null||v===undefined||!isFinite(v))?'—':Number(v).toFixed(1)+'%';
+const shortAddr=a=>a&&a.length>14?a.slice(0,6)+'…'+a.slice(-4):(a||'');
+
+function renderHolders(h){
+  const card=document.getElementById('holdersCard');
+  const btn=document.getElementById('btnHolders'), link=document.getElementById('holdersLink');
+  const body=document.getElementById('holdersBody'), empty=document.getElementById('holdersEmpty');
+  if(!h){ card.style.display='none'; return; }
+  const d=h.data;
+  // Ne veri ne de link varsa kartı hiç gösterme (kontrat adresi çözülemedi)
+  if(!d && !h.explorerUrl){ card.style.display='none'; return; }
+  card.style.display='';
+
+  link.style.display = h.explorerUrl ? '' : 'none';
+  if(h.explorerUrl) link.href=h.explorerUrl;
+  // Buton sadece scrape edilebilen zincirlerde (admin-only CSS'i zaten gizler)
+  btn.style.display = h.scrapable ? '' : 'none';
+  btn.textContent = d ? '↻ Tekrar çek' : '🔍 Holder verisi çek';
+
+  if(!d){
+    body.style.display='none'; empty.style.display='';
+    empty.innerHTML = h.scrapable
+      ? 'Holder verisi henüz çekilmedi.'
+      : `${h.chain||'Bu'} zincirinde otomatik çekim yok — explorer'dan bakabilirsin.`;
+    document.getElementById('holdersMeta').textContent = h.chain ? `· ${h.chain}` : '';
+    return;
+  }
+
+  empty.style.display='none'; body.style.display='';
+  const when=d.fetched_at?new Date(d.fetched_at).toLocaleString('tr-TR'):'—';
+  document.getElementById('holdersMeta').textContent=`· ${d.chain||''} · ${d.explorer||''} · ${when}`;
+
+  const flags=(d.risk_flags?String(d.risk_flags).split(','):[]).filter(Boolean);
+  const riskHtml=d.risk_level
+    ? `<span class="risk r-${d.risk_level}">${RISK_LABEL[d.risk_level]||d.risk_level}</span>`
+    : '—';
+  const kpis=[
+    ['İlk 5 (ham)', pct1(N(d.top5_pct))],
+    ['Temiz ilk 5', pct1(N(d.clean_top5_pct)), N(d.clean_top5_pct)>=60?'neg':''],
+    ['Etiketli pay', pct1(N(d.cex_pool_pct)), 'muted'],
+    ['İlk 10', pct1(N(d.top10_pct))],
+    ['Toplam holder', d.holders_total!=null?Number(d.holders_total).toLocaleString('tr-TR'):'—'],
+    ['Konsantrasyon riski', riskHtml],
+  ];
+  document.getElementById('holdersKpis').innerHTML=
+    kpis.map(k=>`<div class="kpi"><div class="label">${k[0]}</div><div class="value ${k[2]||''}">${k[1]}</div></div>`).join('')+
+    (flags.length?`<div class="kpi"><div class="label">Bayraklar</div><div class="value" style="font-size:12px;color:#fbbf24">${flags.map(f=>FLAG_LABEL[f]||f).join(', ')}</div></div>`:'');
+
+  renderConcChart(d.concentration||[]);
+  renderTiers(d.tiers||[]);
+  renderDepthChart(d.depth||[]);
+  renderTopHolders(d.topHolders||[], d);
+}
+
+function renderConcChart(conc){
+  const el=document.getElementById('concChart');
+  if(concChart) concChart.destroy();
+  if(!conc.length){ el.parentElement.innerHTML='<div class="empty">veri yok</div>'; return; }
+  concChart=new Chart(el,{type:'doughnut',
+    data:{labels:conc.map(c=>c.name),
+      datasets:[{data:conc.map(c=>Number(c.value)||0),
+        backgroundColor:conc.map(c=>c.color||'#4b5563'),borderColor:'#111827',borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'58%',
+      plugins:{legend:{position:'bottom',labels:{color:'#9ca3af',boxWidth:10,font:{size:10},padding:8}},
+        tooltip:{callbacks:{label:c=>{
+          const r=conc[c.dataIndex];
+          return ` ${r.name}: ${Number(r.value).toFixed(2)}%` + (r.amountLabel?` (${String(r.amountLabel).trim()})`:'');
+        }}}}}});
+}
+
+function renderTiers(tiers){
+  const t=document.getElementById('tiersTbl');
+  if(!tiers.length){ t.innerHTML='<tbody><tr><td class="muted">veri yok</td></tr></tbody>'; return; }
+  t.innerHTML='<thead><tr><th>Tier</th><th>Cüzdan</th><th>Arz payı</th></tr></thead><tbody>'+
+    tiers.map(x=>{
+      const c=x.custom||{};
+      return `<tr><td>${x.name}</td><td>${c.holders!=null?Number(c.holders).toLocaleString('tr-TR'):'—'}</td>`+
+             `<td>${c.marketCapShare!=null?Number(c.marketCapShare).toFixed(2)+'%':'—'}</td></tr>`;
+    }).join('')+'</tbody>';
+}
+
+function renderDepthChart(depth){
+  const el=document.getElementById('depthChart');
+  if(depthChart) depthChart.destroy();
+  if(!depth.length){ el.parentElement.innerHTML='<div class="empty">veri yok</div>'; return; }
+  depthChart=new Chart(el,{type:'bar',
+    data:{labels:depth.map(d=>d.name),
+      datasets:[{data:depth.map(d=>(d.custom&&Number(d.custom.rawCount))||0),
+        backgroundColor:'#1abc9c',borderWidth:0}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},
+        tooltip:{callbacks:{label:c=>' '+Number(c.raw).toLocaleString('tr-TR')+' cüzdan'}}},
+      // cüzdan sayıları mertebe farkı taşıyor (1345 vs 10) → log ölçek okunur kılıyor
+      scales:{x:{type:'logarithmic',ticks:{color:'#6b7280',font:{size:10}},grid:{color:'#1f2937'}},
+              y:{ticks:{color:'#9ca3af',font:{size:10}},grid:{display:false}}}}});
+}
+
+function renderTopHolders(rows,d){
+  const t=document.getElementById('topHoldersTbl');
+  if(!rows.length){ t.innerHTML='<tbody><tr><td class="muted">veri yok</td></tr></tbody>'; return; }
+  const base=d.explorer_url?String(d.explorer_url).split('/token/')[0]:null;
+  t.innerHTML='<thead><tr><th>#</th><th>Adres</th><th>Pay</th><th>Değer</th></tr></thead><tbody>'+
+    rows.map(r=>{
+      const name=r.label||shortAddr(r.address);
+      const a=base?`<a class="addr" href="${base}/address/${r.address}" target="_blank" rel="noopener">${name}</a>`:`<span class="addr">${name}</span>`;
+      const kind=r.kind?`<span class="kind k-${r.kind}">${KIND_LABEL[r.kind]||r.kind}</span>`:'';
+      const usd=r.usd?fmtMcap(r.usd):'—';
+      return `<tr><td>${r.rank??''}</td><td style="text-align:left">${a}${kind}</td>`+
+             `<td>${pct1(N(r.pct))}</td><td class="muted">${usd}</td></tr>`;
+    }).join('')+'</tbody>';
+}
+
+document.getElementById('btnHolders').onclick=async function(){
+  const btn=this, old=btn.textContent;
+  btn.disabled=true; btn.innerHTML='<span class="spin">⟳</span> çekiliyor…';
+  try{
+    const r=await fetch(`${API}/holders/${symbol}`,{method:'POST'});
+    const j=await r.json();
+    if(!r.ok) throw new Error(j.error||('Hata '+r.status));
+    await load();   // tüm sayfayı tazele (KPI + grafikler + AI kartı tutarlı kalsın)
+  }catch(e){
+    alert('Holder verisi çekilemedi: '+e.message);
+    btn.disabled=false; btn.textContent=old;
+  }
+};
 
 const dayStr=t=>new Date(t).toISOString().slice(0,10);
 

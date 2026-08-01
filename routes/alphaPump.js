@@ -7,6 +7,7 @@ const live = require('../lib/live');
 const cfg = require('../lib/config');
 const { computeRsi } = require('../lib/rsi');
 const { stochRsiSeries } = require('../lib/tech');
+const holderScrape = require('../lib/holderScrape');
 
 module.exports = (pool) => {
   const router = express.Router();
@@ -227,6 +228,24 @@ module.exports = (pool) => {
     }
   });
 
+  // ── POST /holders/:symbol : holder dağılımını explorer'dan çek + DB'ye yaz ──
+  // Admin butonu tetikler (cron YOK). Ban riskine karşı frenler lib/holderScrape.js içinde:
+  // tek eşzamanlılık, sembol kilidi, HOLDERS_MIN_REFETCH_MIN aralığı, hata cooldown'ı.
+  router.post('/holders/:symbol', async (req, res) => {
+    try {
+      const result = await holderScrape.scrapeOne(pool, req.params.symbol.toUpperCase());
+      res.json(result);
+    } catch (err) {
+      // scrape edilemeyen zincirde (Solana/Sui/Linea) explorer linkini de döndür ki
+      // frontend "Explorer'da aç" butonuna düşebilsin
+      res.status(err.status || 500).json({
+        error: err.message,
+        explorerUrl: err.explorerUrl || null,
+        chain: err.chain || null,
+      });
+    }
+  });
+
   // ── GET /coin/:symbol : detay (metrics + events + klines) ──
   router.get('/coin/:symbol', async (req, res) => {
     try {
@@ -283,7 +302,12 @@ module.exports = (pool) => {
         [techRows] = await pool.query(
           'SELECT * FROM coin_tech_signals WHERE symbol = ?', [symbol]);
       } catch (e) { /* tablo yoksa boş */ }
-      res.json({ metrics: metricsOut, techOnly, events, klines, alphaKlines, rsi, rsiMa, stochK, stochD, techRows });
+      // Holder dağılımı: veri varsa herkese görünür. Veri yoksa bile zincir + explorer
+      // linki döner (scrape edilemeyen zincirlerde kart yalnız "Explorer'da aç" gösterir).
+      let holders = { data: null, chain: null, scrapable: false, explorerUrl: null };
+      try { holders = await holderScrape.getForCoin(pool, symbol); }
+      catch (e) { console.error('[pump/coin] holders hatası:', e.message); }
+      res.json({ metrics: metricsOut, techOnly, events, klines, alphaKlines, rsi, rsiMa, stochK, stochD, techRows, holders });
     } catch (err) {
       console.error('[pump/coin] hata:', err);
       res.status(500).json({ error: err.message });
