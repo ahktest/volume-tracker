@@ -269,7 +269,8 @@ const RISK_LABEL={dusuk:'DÜŞÜK',orta:'ORTA',yuksek:'YÜKSEK',cok_yuksek:'ÇOK
 const KIND_LABEL={cex:'CEX',pool:'HAVUZ',burn:'BURN',other:'KURUMSAL'};
 const FLAG_LABEL={tek_cuzdan_hakim:'tek cüzdan hâkim',az_gercek_holder:'az gerçek holder',
   kilitli_arz:'arzın çoğu kilitli',temiz_top5_eksik:'ilk sıraların çoğu etiketli',
-  etiket_yok:'etiket verisi alınamadı',arz_tutarsiz:'arz verisi tutarsız — oranlar şişkin olabilir'};
+  etiket_yok:'etiket verisi alınamadı',arz_tutarsiz:'arz verisi tutarsız — oranlar şişkin olabilir',
+  yinelenen_adres:'API yinelenen adres döndürdü (birleştirildi)'};
 const pct1=v=>(v===null||v===undefined||!isFinite(v))?'—':Number(v).toFixed(1)+'%';
 const shortAddr=a=>a&&a.length>14?a.slice(0,6)+'…'+a.slice(-4):(a||'');
 
@@ -314,7 +315,8 @@ function renderHolders(h){
     ['Temiz ilk 5', pct1(N(d.clean_top5_pct)), N(d.clean_top5_pct)>=60?'neg':''],
     ['Etiketli pay', pct1(N(d.cex_pool_pct)), 'muted'],
     ['İlk 10', pct1(N(d.top10_pct))],
-    ['İlk 100', pct1(N(d.top100_pct))],
+    ['İlk 100', pct1(N(d.top100_pct)), N(d.top100_pct)>100.5?'neg':''],
+    ['Toplam holder', d.holders_total!=null?Number(d.holders_total).toLocaleString('tr-TR'):'—'],
     ['$1.000+ cüzdan', over1k],
     ['Dolaşım/arz', d.circ_ratio!=null?(Number(d.circ_ratio)*100).toFixed(0)+'%':'—',
       N(d.circ_ratio)!=null&&N(d.circ_ratio)<0.3?'neg':''],

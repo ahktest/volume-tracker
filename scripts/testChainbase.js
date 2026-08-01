@@ -80,14 +80,57 @@ async function cb(path, params) {
   console.log(`$1.000+ cüzdan (ilk ${rows.length} içinde): ${over1k}${over1k >= rows.length ? ' (tavan)' : ''}`);
   if (!price && zeros) console.log('  ✗ fiyat da yok → wallets_over_1k null kalır, bayrak basılmaz');
 
+  // ── YİNELENEN ADRES KONTROLÜ ──
+  // Aynı cüzdan iki satırda gelirse bakiyesi iki kez sayılır → derin kohortlar şişer ve
+  // ilk 100 toplamı %100'ü aşabilir. buildHolders bunları birleştiriyor; burada teşhis edilir.
+  const byAddr = new Map();
+  for (const x of rows) {
+    const k = String(x.wallet_address || '').toLowerCase();
+    byAddr.set(k, (byAddr.get(k) || 0) + 1);
+  }
+  const dupAddrs = [...byAddr.entries()].filter(([, n]) => n > 1);
+  console.log(`\n── yinelenen adres ──`);
+  console.log(`benzersiz adres: ${byAddr.size}/${rows.length}` +
+    (dupAddrs.length ? `  ✗ ${dupAddrs.length} adres tekrar ediyor` : '  ✓ tekrar yok'));
+  for (const [a, n] of dupAddrs.slice(0, 5)) console.log(`   ${a} ×${n}`);
+
   // ── Yüzde tutarlılığı ──
-  const sum = rows.reduce((s, x) => s + (Number(x.amount) || 0), 0);
+  const amtOf = x => Number(x.amount) || 0;
+  const sum = rows.reduce((s, x) => s + amtOf(x), 0);
+  // Birleştirilmiş (yinelenensiz) hâli — üretimde kullanılan değer bu
+  const uniq = new Map();
+  for (const x of rows) {
+    const k = String(x.wallet_address || '').toLowerCase();
+    uniq.set(k, (uniq.get(k) || 0) + amtOf(x));
+  }
+  const uniqAmts = [...uniq.values()].sort((a, b) => b - a);
+  const cumU = n => uniqAmts.slice(0, n).reduce((s, v) => s + v, 0) / total * 100;
   const pct = total > 0 ? (sum / total) * 100 : NaN;
-  const top5 = rows.slice(0, 5).reduce((s, x) => s + (Number(x.amount) || 0), 0) / total * 100;
-  console.log(`\nilk 5 = %${top5.toFixed(2)} · ilk ${rows.length} = %${pct.toFixed(2)}`);
-  console.log(pct <= 100.5
-    ? '  ✓ tutarlı (toplam arzı aşmıyor)'
-    : '  ✗ TUTARSIZ: ilk 100 toplam arzı aşıyor → amount birimi ya da totalSupply hatalı!');
+
+  console.log(`\n── kohortlar (payda: toplam arz ${total.toLocaleString('tr-TR')}) ──`);
+  console.log(`               ham        birleştirilmiş`);
+  for (const n of [5, 10, 25, 50, 100]) {
+    const raw = rows.slice(0, n).reduce((s, x) => s + amtOf(x), 0) / total * 100;
+    console.log(`  ilk ${String(n).padEnd(4)} %${raw.toFixed(2).padStart(7)}   %${cumU(n).toFixed(2).padStart(7)}`);
+  }
+  console.log(cumU(100) <= 100.5
+    ? '  ✓ tutarlı (birleştirilmiş ilk 100 toplam arzı aşmıyor)'
+    : '  ✗ HÂLÂ TUTARSIZ: yinelenen adres sebep değil → totalSupply bayat ya da amount ölçeği farklı');
+
+  // ── BscScan ile karşılaştırma (elle girilen referans) ──
+  // Kullanım: BSCSCAN_TOP5=68.81 BSCSCAN_TOP10=80.19 BSCSCAN_TOP100=96.20 node scripts/testChainbase.js SEMBOL
+  const ref = { 5: Number(process.env.BSCSCAN_TOP5), 10: Number(process.env.BSCSCAN_TOP10), 100: Number(process.env.BSCSCAN_TOP100) };
+  if (Object.values(ref).some(v => v > 0)) {
+    console.log('\n── explorer referansıyla fark ──');
+    for (const n of [5, 10, 100]) {
+      if (!(ref[n] > 0)) continue;
+      const bizim = cumU(n), d = bizim - ref[n];
+      console.log(`  ilk ${String(n).padEnd(3)} explorer=%${ref[n].toFixed(2)}  bizim=%${bizim.toFixed(2)}  fark=${d >= 0 ? '+' : ''}${d.toFixed(2)}  oran=${(bizim / ref[n]).toFixed(4)}`);
+    }
+    console.log('  Oranlar BİRBİRİNE YAKINSA payda (totalSupply) hatalı; AYRIŞIYORSA holder seti farklı.');
+  } else {
+    console.log('\n(explorer karşılaştırması için: BSCSCAN_TOP5=.. BSCSCAN_TOP10=.. BSCSCAN_TOP100=.. ile çalıştır)');
+  }
 
   // ── 2) labels ──
   // CANLI TESTTE 3/3 boş (`data:{}`) döndü → cfg.CHAINBASE_LABEL_TOP_N=0 ile kapatıldı.
