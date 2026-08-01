@@ -132,6 +132,45 @@ async function cb(path, params) {
     console.log('\n(explorer karşılaştırması için: BSCSCAN_TOP5=.. BSCSCAN_TOP10=.. BSCSCAN_TOP100=.. ile çalıştır)');
   }
 
+  // ── ZİNCİRDEN DOĞRULAMA ──
+  // "ilk 100 > %100" imkânsız görünüyor. Suçlu kim: Chainbase'in bakiyeleri mi, totalSupply mı?
+  // Zincire doğrudan sorup kesinleştirir (public RPC, key yok).
+  const rpc = cfg.HOLDER_RPC[t.chainName];
+  if (rpc) {
+    console.log('\n── zincirden doğrulama (public RPC) ──');
+    const ethCall = async (to, data) => {
+      const r = await axios.post(rpc, { jsonrpc: '2.0', id: 1, method: 'eth_call',
+        params: [{ to, data }, 'latest'] }, { timeout: 15000 });
+      return r.data && r.data.result;
+    };
+    try {
+      const decHex = await ethCall(t.contractAddress, '0x313ce567');       // decimals()
+      const tsHex  = await ethCall(t.contractAddress, '0x18160ddd');       // totalSupply()
+      const dec = parseInt(decHex, 16);
+      const chainTotal = Number(BigInt(tsHex)) / 10 ** dec;
+      console.log(`decimals=${dec} · zincir totalSupply=${chainTotal.toLocaleString('tr-TR')}`);
+      console.log(`Binance listesi=${total.toLocaleString('tr-TR')} → ` +
+        (Math.abs(chainTotal - total) / chainTotal < 0.001 ? 'AYNI ✓' : `FARKLI ✗ (oran ${(total / chainTotal).toFixed(4)})`));
+
+      // Örnek bakiyeleri zincirle karşılaştır: 1., 2., 50. ve 100. sıradakiler
+      const idx = [0, 1, Math.min(49, rows.length - 1), rows.length - 1];
+      let mismatch = 0;
+      for (const i of idx) {
+        const a = rows[i].wallet_address;
+        const bHex = await ethCall(t.contractAddress, '0x70a08231' + a.replace(/^0x/, '').toLowerCase().padStart(64, '0'));
+        const onchain = Number(BigInt(bHex)) / 10 ** dec;
+        const cb = Number(rows[i].amount);
+        const diff = onchain - cb;
+        if (Math.abs(diff) > Math.max(1, cb * 0.001)) mismatch++;
+        console.log(`  #${String(i + 1).padStart(3)} ${a.slice(0, 10)}… zincir=${onchain.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} ` +
+          `chainbase=${cb.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} ${Math.abs(diff) < 1 ? '✓' : '✗ fark=' + diff.toFixed(0)}`);
+      }
+      console.log(mismatch
+        ? `  ✗ ${mismatch} bakiye uyuşmuyor → Chainbase verisi bayat/yanlış`
+        : '  ✓ örneklenen bakiyeler zincirle birebir → Chainbase doğru, oran farkı explorer’ın kendi normalizasyonundan');
+    } catch (e) { console.log('  RPC hatası:', e.message); }
+  }
+
   // ── 2) labels ──
   // CANLI TESTTE 3/3 boş (`data:{}`) döndü → cfg.CHAINBASE_LABEL_TOP_N=0 ile kapatıldı.
   // Burada yine de yoklanır: bir gün dolu gelmeye başlarsa ayarı açmak yeterli.
