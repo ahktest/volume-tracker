@@ -270,7 +270,8 @@ const KIND_LABEL={cex:'CEX',pool:'HAVUZ',burn:'BURN',other:'KURUMSAL'};
 const FLAG_LABEL={tek_cuzdan_hakim:'tek cüzdan hâkim',az_gercek_holder:'az gerçek holder',
   kilitli_arz:'arzın çoğu kilitli',temiz_top5_eksik:'ilk sıraların çoğu etiketli',
   etiket_yok:'etiket verisi alınamadı',arz_tutarsiz:'arz verisi tutarsız — oranlar şişkin olabilir',
-  yinelenen_adres:'API yinelenen adres döndürdü (birleştirildi)'};
+  yinelenen_adres:'API yinelenen adres döndürdü (birleştirildi)',
+  zincir_dogrulanmadi:'bakiyeler zincirden doğrulanamadı'};
 const pct1=v=>(v===null||v===undefined||!isFinite(v))?'—':Number(v).toFixed(1)+'%';
 const shortAddr=a=>a&&a.length>14?a.slice(0,6)+'…'+a.slice(-4):(a||'');
 
