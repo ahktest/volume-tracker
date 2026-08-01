@@ -154,20 +154,21 @@
           <div class="hsub">Konsantrasyon</div>
           <div style="height:230px"><canvas id="concChart"></canvas></div>
         </div>
-        <div>
+        <div id="tiersPanel" style="display:none">
           <div class="hsub">Tier dağılımı</div>
           <table id="tiersTbl"></table>
         </div>
-        <div>
+        <div id="depthPanel" style="display:none">
           <div class="hsub">Cüzdan derinliği</div>
           <div style="height:230px"><canvas id="depthChart"></canvas></div>
         </div>
       </div>
-      <div class="hsub" style="margin-top:16px">En büyük 25 cüzdan</div>
+      <div class="hsub" style="margin-top:16px" id="topHoldersTitle">En büyük cüzdanlar</div>
       <table id="topHoldersTbl"></table>
       <div class="muted" style="margin-top:10px;font-size:11px">
         Ham "ilk 5" oranına borsa cüzdanları, likidite havuzları ve proje/vesting adresleri de dahildir.
         <strong>Temiz ilk 5</strong> bunları düşer — asıl konsantrasyon ölçüsü odur.
+        Yüzdeler <strong>toplam arza</strong> göredir.
       </div>
     </div>
   </div>
@@ -259,7 +260,8 @@ let concChart, depthChart;
 const RISK_LABEL={dusuk:'DÜŞÜK',orta:'ORTA',yuksek:'YÜKSEK',cok_yuksek:'ÇOK YÜKSEK'};
 const KIND_LABEL={cex:'CEX',pool:'HAVUZ',burn:'BURN',other:'KURUMSAL'};
 const FLAG_LABEL={tek_cuzdan_hakim:'tek cüzdan hâkim',az_gercek_holder:'az gerçek holder',
-  dusuk_likidite:'düşük likidite',temiz_top5_eksik:'top25’in çoğu etiketli'};
+  kilitli_arz:'arzın çoğu kilitli',temiz_top5_eksik:'ilk sıraların çoğu etiketli',
+  etiket_yok:'etiket verisi alınamadı'};
 const pct1=v=>(v===null||v===undefined||!isFinite(v))?'—':Number(v).toFixed(1)+'%';
 const shortAddr=a=>a&&a.length>14?a.slice(0,6)+'…'+a.slice(-4):(a||'');
 
@@ -275,13 +277,13 @@ function renderHolders(h){
 
   link.style.display = h.explorerUrl ? '' : 'none';
   if(h.explorerUrl) link.href=h.explorerUrl;
-  // Buton sadece scrape edilebilen zincirlerde (admin-only CSS'i zaten gizler)
-  btn.style.display = h.scrapable ? '' : 'none';
+  // Buton yalnız Chainbase'in desteklediği zincirlerde (admin-only CSS'i zaten gizler)
+  btn.style.display = h.canFetch ? '' : 'none';
   btn.textContent = d ? '↻ Tekrar çek' : '🔍 Holder verisi çek';
 
   if(!d){
     body.style.display='none'; empty.style.display='';
-    empty.innerHTML = h.scrapable
+    empty.textContent = h.canFetch
       ? 'Holder verisi henüz çekilmedi.'
       : `${h.chain||'Bu'} zincirinde otomatik çekim yok — explorer'dan bakabilirsin.`;
     document.getElementById('holdersMeta').textContent = h.chain ? `· ${h.chain}` : '';
@@ -296,12 +298,18 @@ function renderHolders(h){
   const riskHtml=d.risk_level
     ? `<span class="risk r-${d.risk_level}">${RISK_LABEL[d.risk_level]||d.risk_level}</span>`
     : '—';
+  const over1k = d.wallets_over_1k!=null
+    ? (+d.holders_capped?'≥':'')+Number(d.wallets_over_1k).toLocaleString('tr-TR')
+    : '—';
   const kpis=[
     ['İlk 5 (ham)', pct1(N(d.top5_pct))],
     ['Temiz ilk 5', pct1(N(d.clean_top5_pct)), N(d.clean_top5_pct)>=60?'neg':''],
     ['Etiketli pay', pct1(N(d.cex_pool_pct)), 'muted'],
     ['İlk 10', pct1(N(d.top10_pct))],
-    ['Toplam holder', d.holders_total!=null?Number(d.holders_total).toLocaleString('tr-TR'):'—'],
+    ['İlk 100', pct1(N(d.top100_pct))],
+    ['$1.000+ cüzdan', over1k],
+    ['Dolaşım/arz', d.circ_ratio!=null?(Number(d.circ_ratio)*100).toFixed(0)+'%':'—',
+      N(d.circ_ratio)!=null&&N(d.circ_ratio)<0.3?'neg':''],
     ['Konsantrasyon riski', riskHtml],
   ];
   document.getElementById('holdersKpis').innerHTML=
@@ -309,9 +317,17 @@ function renderHolders(h){
     (flags.length?`<div class="kpi"><div class="label">Bayraklar</div><div class="value" style="font-size:12px;color:#fbbf24">${flags.map(f=>FLAG_LABEL[f]||f).join(', ')}</div></div>`:'');
 
   renderConcChart(d.concentration||[]);
-  renderTiers(d.tiers||[]);
-  renderDepthChart(d.depth||[]);
-  renderTopHolders(d.topHolders||[], d);
+  // Tier dağılımı ve cüzdan derinliği ilk 100'den hesaplanamaz (tüm holder seti gerekir) →
+  // Chainbase kaynağında bu iki panel gizli kalır; veri gelirse kendiliğinden açılır.
+  const tiers=d.tiers||[], depth=d.depth||[];
+  document.getElementById('tiersPanel').style.display = tiers.length?'':'none';
+  document.getElementById('depthPanel').style.display = depth.length?'':'none';
+  if(tiers.length) renderTiers(tiers);
+  if(depth.length) renderDepthChart(depth);
+
+  const top=d.topHolders||[];
+  document.getElementById('topHoldersTitle').textContent=`En büyük ${top.length} cüzdan`;
+  renderTopHolders(top, d);
 }
 
 function renderConcChart(conc){
@@ -357,34 +373,33 @@ function renderDepthChart(depth){
               y:{ticks:{color:'#9ca3af',font:{size:10}},grid:{display:false}}}}});
 }
 
+// Chainbase 100 cüzdan döndürüyor — hepsini birden basmak tabloyu boğuyor.
+// İlk 25 gösterilir, gerisi butonla açılır (pump.html'deki "daha fazla yükle" deseni).
+const TOP_HOLDERS_PREVIEW=25;
 function renderTopHolders(rows,d){
   const t=document.getElementById('topHoldersTbl');
   if(!rows.length){ t.innerHTML='<tbody><tr><td class="muted">veri yok</td></tr></tbody>'; return; }
   const base=d.explorer_url?String(d.explorer_url).split('/token/')[0]:null;
-  t.innerHTML='<thead><tr><th>#</th><th>Adres</th><th>Pay</th><th>Değer</th></tr></thead><tbody>'+
-    rows.map(r=>{
-      const name=r.label||shortAddr(r.address);
-      const a=base?`<a class="addr" href="${base}/address/${r.address}" target="_blank" rel="noopener">${name}</a>`:`<span class="addr">${name}</span>`;
-      const kind=r.kind?`<span class="kind k-${r.kind}">${KIND_LABEL[r.kind]||r.kind}</span>`:'';
-      const usd=r.usd?fmtMcap(r.usd):'—';
-      return `<tr><td>${r.rank??''}</td><td style="text-align:left">${a}${kind}</td>`+
-             `<td>${pct1(N(r.pct))}</td><td class="muted">${usd}</td></tr>`;
-    }).join('')+'</tbody>';
+  const row=r=>{
+    const name=r.label||shortAddr(r.address);
+    const a=base?`<a class="addr" href="${base}/address/${r.address}" target="_blank" rel="noopener">${name}</a>`:`<span class="addr">${name}</span>`;
+    const kind=r.kind?`<span class="kind k-${r.kind}">${KIND_LABEL[r.kind]||r.kind}</span>`:'';
+    return `<tr><td>${r.rank??''}</td><td style="text-align:left">${a}${kind}</td>`+
+           `<td>${pct1(N(r.pct))}</td><td class="muted">${r.usd?fmtMcap(r.usd):'—'}</td></tr>`;
+  };
+  const head='<thead><tr><th>#</th><th>Adres</th><th>Pay</th><th>Değer</th></tr></thead>';
+  const draw=all=>{
+    const show=all?rows:rows.slice(0,TOP_HOLDERS_PREVIEW);
+    t.innerHTML=head+'<tbody>'+show.map(row).join('')+
+      (!all&&rows.length>TOP_HOLDERS_PREVIEW
+        ? `<tr><td colspan="4" style="text-align:center"><button class="btn" id="topMore" style="background:#1f2937;color:#93c5fd;font-size:12px">↓ kalan ${rows.length-TOP_HOLDERS_PREVIEW} cüzdanı göster</button></td></tr>`
+        : '')+'</tbody>';
+    const b=document.getElementById('topMore');
+    if(b) b.onclick=()=>draw(true);
+  };
+  draw(false);
 }
 
-document.getElementById('btnHolders').onclick=async function(){
-  const btn=this, old=btn.textContent;
-  btn.disabled=true; btn.innerHTML='<span class="spin">⟳</span> çekiliyor…';
-  try{
-    const r=await fetch(`${API}/holders/${symbol}`,{method:'POST'});
-    const j=await r.json();
-    if(!r.ok) throw new Error(j.error||('Hata '+r.status));
-    await load();   // tüm sayfayı tazele (KPI + grafikler + AI kartı tutarlı kalsın)
-  }catch(e){
-    alert('Holder verisi çekilemedi: '+e.message);
-    btn.disabled=false; btn.textContent=old;
-  }
-};
 
 const dayStr=t=>new Date(t).toISOString().slice(0,10);
 
@@ -706,6 +721,20 @@ document.getElementById('btnRefresh').onclick=async function(){
 };
 
 document.getElementById('btnAi').onclick=genAi;
+
+document.getElementById('btnHolders').onclick=async function(){
+  const btn=this, old=btn.textContent;
+  btn.disabled=true; btn.innerHTML='<span class="spin">⟳</span> çekiliyor…';
+  try{
+    const r=await fetch(`${API}/holders/${symbol}`,{method:'POST'});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(j.error||('Hata '+r.status));
+    await load();   // sayfayı tazele (KPI + grafikler + AI kartı tutarlı kalsın)
+  }catch(e){
+    alert('Holder verisi çekilemedi: '+e.message);
+    btn.disabled=false; btn.textContent=old;
+  }
+};
 
 load();
 loadAi();

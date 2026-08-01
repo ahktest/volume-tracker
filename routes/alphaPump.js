@@ -7,7 +7,7 @@ const live = require('../lib/live');
 const cfg = require('../lib/config');
 const { computeRsi } = require('../lib/rsi');
 const { stochRsiSeries } = require('../lib/tech');
-const holderScrape = require('../lib/holderScrape');
+const holders = require('../lib/holders');
 
 module.exports = (pool) => {
   const router = express.Router();
@@ -228,22 +228,18 @@ module.exports = (pool) => {
     }
   });
 
-  // ── POST /holders/:symbol : holder dağılımını explorer'dan çek + DB'ye yaz ──
-  // Admin butonu tetikler (cron YOK). Ban riskine karşı frenler lib/holderScrape.js içinde:
-  // tek eşzamanlılık, sembol kilidi, HOLDERS_MIN_REFETCH_MIN aralığı, hata cooldown'ı.
+  // ── POST /holders/:symbol : holder dağılımını Chainbase'den çek + DB'ye yaz ──
+  // Admin butonu tetikler (cron YOK). Frenler lib/holders.js içinde: tek eşzamanlılık,
+  // sembol kilidi, HOLDERS_MIN_REFETCH_MIN aralığı, hata cooldown'ı (kredi + kota koruması).
   router.post('/holders/:symbol', async (req, res) => {
+    const symbol = req.params.symbol.toUpperCase();
     try {
-      const result = await holderScrape.scrapeOne(pool, req.params.symbol.toUpperCase());
-      res.json(result);
+      res.json(await holders.refreshOne(pool, symbol));
     } catch (err) {
       const status = err.status || 500;
-      // 400/409/429 normal akış (yanlış zincir, kilit, cooldown) — gürültü yapma.
-      // 5xx gerçek arıza: explorer engeli, sayfa yapısı değişikliği vs. → logla.
-      if (status >= 500) {
-        console.error(`[pump/holders] ${req.params.symbol.toUpperCase()} hata:`, err.message);
-      }
-      // scrape edilemeyen zincirde (Solana/Sui/Linea) explorer linkini de döndür ki
-      // frontend "Explorer'da aç" butonuna düşebilsin
+      // 400/409/422/429 normal akış (desteklenmeyen zincir, kilit, cooldown) — gürültü yapma.
+      // 5xx gerçek arıza: Chainbase key/kota/şema sorunu → logla.
+      if (status >= 500) console.error(`[pump/holders] ${symbol} hata:`, err.message);
       res.status(status).json({
         error: err.message,
         explorerUrl: err.explorerUrl || null,
@@ -308,12 +304,12 @@ module.exports = (pool) => {
         [techRows] = await pool.query(
           'SELECT * FROM coin_tech_signals WHERE symbol = ?', [symbol]);
       } catch (e) { /* tablo yoksa boş */ }
-      // Holder dağılımı: veri varsa herkese görünür. Veri yoksa bile zincir + explorer
-      // linki döner (scrape edilemeyen zincirlerde kart yalnız "Explorer'da aç" gösterir).
-      let holders = { data: null, chain: null, scrapable: false, explorerUrl: null };
-      try { holders = await holderScrape.getForCoin(pool, symbol); }
+      // Holder dağılımı: veri varsa herkese görünür; çekme butonu yalnız admin'de.
+      // Chainbase EVM-only → Solana/Sui/TRON'da canFetch=false, kart sadece explorer linki gösterir.
+      let holdersOut = { data: null, chain: null, canFetch: false, explorerUrl: null };
+      try { holdersOut = await holders.getForCoin(pool, symbol); }
       catch (e) { console.error('[pump/coin] holders hatası:', e.message); }
-      res.json({ metrics: metricsOut, techOnly, events, klines, alphaKlines, rsi, rsiMa, stochK, stochD, techRows, holders });
+      res.json({ metrics: metricsOut, techOnly, events, klines, alphaKlines, rsi, rsiMa, stochK, stochD, techRows, holders: holdersOut });
     } catch (err) {
       console.error('[pump/coin] hata:', err);
       res.status(500).json({ error: err.message });

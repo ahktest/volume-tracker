@@ -42,9 +42,17 @@ CREATE TABLE IF NOT EXISTS coin_holders (
 
 // Tablo önceki sürümde oluşturulmuşsa CREATE IF NOT EXISTS bunları eklemez.
 const LATER_COLS = [
-  ['gini',           'DECIMAL(7,4) NULL'],
-  ['clean_top5_pct', 'DECIMAL(7,4) NULL'],
-  ['cex_pool_pct',   'DECIMAL(7,4) NULL'],
+  ['gini',              'DECIMAL(7,4) NULL'],
+  ['clean_top5_pct',    'DECIMAL(7,4) NULL'],
+  ['cex_pool_pct',      'DECIMAL(7,4) NULL'],
+  // Chainbase sürümüyle gelenler (top-holders limit=100 → 50/100 kohortları da hesaplanıyor)
+  ['top50_pct',         'DECIMAL(7,4) NULL'],
+  ['top100_pct',        'DECIMAL(7,4) NULL'],
+  ['total_supply',      'DECIMAL(40,0) NULL COMMENT "yüzdelerin paydası (Binance alpha listesi)"'],
+  ['circulating_supply','DECIMAL(40,0) NULL'],
+  ['circ_ratio',        'DECIMAL(7,4) NULL COMMENT "dolaşım/toplam — düşükse arz kilitli"'],
+  ['wallets_over_1k',   'INT NULL COMMENT "ilk 100 içinde >=$1.000 tutan cüzdan (100 ise tavan)"'],
+  ['holders_capped',    'TINYINT(1) NULL COMMENT "wallets_over_1k tavana dayandı mı"'],
 ];
 
 (async () => {
