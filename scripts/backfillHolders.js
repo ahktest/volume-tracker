@@ -13,6 +13,7 @@
 //   node scripts/backfillHolders.js --limit 20       # ilk N coin (deneme için)
 //   node scripts/backfillHolders.js --max-age 48     # bu saatten eski olanları tazele (varsayılan 24)
 //   node scripts/backfillHolders.js --delay 1500     # coinler arası ms (varsayılan 800)
+//   node scripts/backfillHolders.js --no-labels      # etiket çekme (2× hızlı, hız limiti yemez)
 //
 // Ctrl+C ile güvenle durdurulabilir: her coin tek tek DB'ye yazılır, tekrar çalıştırınca
 // kaldığı yerden devam eder (--force verilmedikçe taze olanları atlar).
@@ -35,7 +36,13 @@ const OPT = {
   limit:  Number(val('--limit', 0)) || 0,
   maxAge: Number(val('--max-age', 24)),      // saat
   delay:  Number(val('--delay', 800)),       // ms
+  noLabels: has('--no-labels'),
 };
+
+// Etiket çekimi coin başına 10 ekstra Chainbase çağrısı → hız limitine takılıyor ve süreyi
+// ~2 katına çıkarıyor. Toplu çekimde kapatılabilsin (kohort/risk hesabı etkilenmez, yalnız
+// "temiz ilk 5" ham orana eşitlenir ve `etiket_yok` bayrağı düşer).
+if (OPT.noLabels) cfg.CHAINBASE_LABEL_TOP_N = 0;
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const pad = (s, n) => String(s).padEnd(n);
