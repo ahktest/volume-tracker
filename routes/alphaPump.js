@@ -248,6 +248,19 @@ module.exports = (pool) => {
     }
   });
 
+  // ── POST /holders/:symbol/chains : TÜM zincirlerin holder'larını çek ──
+  // Zincir sekmeleri için. Zincir başına bağımsız: biri patlarsa diğerleri yazılır.
+  router.post('/holders/:symbol/chains', async (req, res) => {
+    const symbol = req.params.symbol.toUpperCase();
+    try {
+      res.json(await holders.refreshChains(pool, symbol, { force: true }));
+    } catch (err) {
+      const status = err.status || 500;
+      if (status >= 500) console.error(`[pump/holders-chains] ${symbol} hata:`, err.message);
+      res.status(status).json({ error: err.message, explorerUrl: err.explorerUrl || null });
+    }
+  });
+
   // ── GET /coin/:symbol : detay (metrics + events + klines) ──
   router.get('/coin/:symbol', async (req, res) => {
     try {

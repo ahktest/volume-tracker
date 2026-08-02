@@ -53,7 +53,43 @@ const LATER_COLS = [
   ['circ_ratio',        'DECIMAL(7,4) NULL COMMENT "dolaşım/toplam — düşükse arz kilitli"'],
   ['wallets_over_1k',   'INT NULL COMMENT "ilk 100 içinde >=$1.000 tutan cüzdan (100 ise tavan)"'],
   ['holders_capped',    'TINYINT(1) NULL COMMENT "wallets_over_1k tavana dayandı mı"'],
+  // Çok zincirli arz dağılımı
+  ['chains_json',       'LONGTEXT NULL COMMENT "zincir başına arz + kontrat, arza göre sıralı"'],
+  ['primary_chain',     'VARCHAR(24) NULL COMMENT "en yüksek arzlı zincir (varsayılan sekme)"'],
+  ['chain_count',       'INT NULL'],
+  ['supply_pct',        'DECIMAL(7,4) NULL COMMENT "birincil zincirin global arz içindeki payı"'],
 ];
+
+// Zincir başına holder verisi. coin_holders (PK symbol) "birincil zincir" özetini tutar;
+// bu tablo her zincirin tam kaydını tutar → UI sekmeleri buradan beslenir.
+const CREATE_CHAIN = `
+CREATE TABLE IF NOT EXISTS coin_chain_holders (
+  symbol            VARCHAR(40)   NOT NULL,
+  chain             VARCHAR(24)   NOT NULL,
+  contract_address  VARCHAR(120)  NULL,
+  explorer          VARCHAR(32)   NULL,
+  explorer_url      VARCHAR(300)  NULL,
+  total_supply      DECIMAL(50,8) NULL COMMENT 'bu zincirdeki kontratın totalSupply()',
+  supply_pct        DECIMAL(7,4)  NULL COMMENT 'global arz içindeki payı',
+  top5_pct          DECIMAL(7,4)  NULL,
+  top10_pct         DECIMAL(7,4)  NULL,
+  top25_pct         DECIMAL(7,4)  NULL,
+  top50_pct         DECIMAL(7,4)  NULL,
+  top100_pct        DECIMAL(7,4)  NULL,
+  clean_top5_pct    DECIMAL(7,4)  NULL,
+  cex_pool_pct      DECIMAL(7,4)  NULL,
+  holders_total     INT           NULL,
+  wallets_over_1k   INT           NULL,
+  holders_capped    TINYINT(1)    NULL,
+  concentration_json LONGTEXT     NULL,
+  top_holders_json   LONGTEXT     NULL,
+  risk_level        VARCHAR(16)   NULL,
+  risk_flags        TEXT          NULL,
+  fetched_at        DATETIME      NULL,
+  source            VARCHAR(32)   NULL,
+  PRIMARY KEY (symbol, chain),
+  KEY idx_symbol_supply (symbol, supply_pct)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci`;
 
 (async () => {
   const pool = mysql.createPool({
@@ -64,6 +100,11 @@ const LATER_COLS = [
     await pool.query(CREATE);
     console.log('✓ tablo hazır: coin_holders');
   } catch (e) { console.error('✗ coin_holders:', e.message); }
+
+  try {
+    await pool.query(CREATE_CHAIN);
+    console.log('✓ tablo hazır: coin_chain_holders');
+  } catch (e) { console.error('✗ coin_chain_holders:', e.message); }
 
   for (const [name, def] of LATER_COLS) {
     try {

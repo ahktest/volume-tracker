@@ -75,6 +75,16 @@
     .kind{font-size:10px;font-weight:700;border-radius:4px;padding:1px 6px;margin-left:5px}
     .k-cex{background:#ea580c33;color:#fdba74}.k-pool{background:#2563eb33;color:#93c5fd}
     .k-burn{background:#4b556333;color:#9ca3af}.k-other{background:#7c3aed33;color:#c4b5fd}
+    /* Zincir sekmeleri — arza göre sıralı, ilki (en yüksek arz) varsayılan */
+    .chain-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;border-bottom:1px solid #1f2937;padding-bottom:10px}
+    .ctab{background:#0f172a;border:1px solid #1f2937;border-radius:8px;padding:6px 11px;cursor:pointer;
+          font-size:12px;color:#9ca3af;display:flex;align-items:center;gap:7px}
+    .ctab:hover{border-color:#374151;color:#d1d5db}
+    .ctab.on{background:#1e3a8a33;border-color:#2563eb;color:#dbeafe}
+    .ctab .sup{font-weight:700;color:#93c5fd}
+    .ctab.on .sup{color:#bfdbfe}
+    .ctab .nodata{font-size:10px;color:#6b7280}
+    .ctab .alpha{font-size:9px;font-weight:700;background:#7c3aed33;color:#c4b5fd;border-radius:3px;padding:1px 4px}
     .risk{font-size:11px;font-weight:700;border-radius:5px;padding:2px 8px}
     .r-dusuk{background:#05966933;color:#6ee7b7}.r-orta{background:#f59e0b33;color:#fbbf24}
     .r-yuksek{background:#ea580c33;color:#fdba74}.r-cok_yuksek{background:#dc262633;color:#fca5a5}
@@ -147,8 +157,10 @@
       <div style="display:flex;gap:8px;align-items:center">
         <a id="holdersLink" class="cmc" href="#" target="_blank" rel="noopener" style="display:none">Explorer'da aç ↗</a>
         <button class="btn admin-only" id="btnHolders" style="display:none">🔍 Holder verisi çek</button>
+        <button class="btn admin-only" id="btnChains" style="display:none" title="Tokenin bulunduğu tüm ağlardan holder verisi çeker">🌐 Tüm ağları çek</button>
       </div>
     </div>
+    <div id="chainBar" style="display:none"></div>
     <div id="holdersEmpty" class="empty" style="display:none"></div>
     <div id="holdersBody" style="display:none">
       <div class="kpi-row" id="holdersKpis"></div>
@@ -271,39 +283,89 @@ const FLAG_LABEL={tek_cuzdan_hakim:'tek cüzdan hâkim',az_gercek_holder:'az ger
   kilitli_arz:'arzın çoğu kilitli',temiz_top5_eksik:'ilk sıraların çoğu etiketli',
   etiket_yok:'etiket verisi alınamadı',arz_tutarsiz:'arz verisi tutarsız — oranlar şişkin olabilir',
   yinelenen_adres:'API yinelenen adres döndürdü (birleştirildi)',
-  zincir_dogrulanmadi:'bakiyeler zincirden doğrulanamadı'};
+  zincir_dogrulanmadi:'bakiyeler zincirden doğrulanamadı',
+  kopru_arz:'token birden fazla ağda — oranlar bu ağın arzına göre'};
 const pct1=v=>(v===null||v===undefined||!isFinite(v))?'—':Number(v).toFixed(1)+'%';
 const shortAddr=a=>a&&a.length>14?a.slice(0,6)+'…'+a.slice(-4):(a||'');
 
+// Zincir sekmeleri: `chains` arza göre sıralı gelir → ilk sekme (en yüksek arz) varsayılan.
+// Sekmenin verisi `chainRows`'tan gelir; yoksa sekme açılınca "çekilmedi" mesajı görünür.
+let HOLDERS=null, activeChain=null;
+
 function renderHolders(h){
   const card=document.getElementById('holdersCard');
-  const btn=document.getElementById('btnHolders'), link=document.getElementById('holdersLink');
-  const body=document.getElementById('holdersBody'), empty=document.getElementById('holdersEmpty');
+  const btn=document.getElementById('btnHolders'), btnCh=document.getElementById('btnChains');
+  const link=document.getElementById('holdersLink');
   if(!h){ card.style.display='none'; return; }
-  const d=h.data;
-  // Ne veri ne de link varsa kartı hiç gösterme (kontrat adresi çözülemedi)
-  if(!d && !h.explorerUrl){ card.style.display='none'; return; }
+  HOLDERS=h;
+  const chains=h.chains||[];
+  if(!h.data && !h.explorerUrl && !chains.length){ card.style.display='none'; return; }
   card.style.display='';
 
+  // Explorer linki EN YÜKSEK ARZLI zincirin (chains zaten sıralı)
   link.style.display = h.explorerUrl ? '' : 'none';
   if(h.explorerUrl) link.href=h.explorerUrl;
-  // Buton yalnız Chainbase'in desteklediği zincirlerde (admin-only CSS'i zaten gizler)
   btn.style.display = h.canFetch ? '' : 'none';
-  btn.textContent = d ? '↻ Tekrar çek' : '🔍 Holder verisi çek';
+  btn.textContent = h.data ? '↻ Tekrar çek' : '🔍 Holder verisi çek';
+  // "Tüm ağları çek" yalnız birden fazla desteklenen zincir varsa anlamlı
+  btnCh.style.display = chains.filter(c=>c.supported).length>1 ? '' : 'none';
+
+  // İlk açılışta en yüksek arzlı zincir seçili gelir
+  if(!activeChain || !chains.some(c=>c.chain===activeChain))
+    activeChain = chains.length ? chains[0].chain : (h.chain||null);
+
+  renderChainTabs(chains, h);
+  renderChainPanel(activeChain, h);
+}
+
+function renderChainTabs(chains,h){
+  const bar=document.getElementById('chainBar');
+  if(chains.length<2){ bar.style.display='none'; return; }
+  bar.style.display='';
+  const rows=new Map((h.chainRows||[]).map(r=>[r.chain,r]));
+  bar.innerHTML='<div class="chain-tabs">'+chains.map(c=>{
+    const has=rows.has(c.chain);
+    const sup=c.supplyPct==null?'?':Number(c.supplyPct).toFixed(1);
+    const alpha=c.chain===h.alphaChain?'<span class="alpha">ALPHA</span>':'';
+    const nd=has?'':'<span class="nodata">veri yok</span>';
+    return `<div class="ctab${c.chain===activeChain?' on':''}" data-chain="${c.chain}">`+
+           `<span>${c.chain}</span><span class="sup">%${sup}</span>${alpha}${nd}</div>`;
+  }).join('')+'</div>';
+  bar.querySelectorAll('.ctab').forEach(t=>t.onclick=()=>{
+    activeChain=t.dataset.chain;
+    renderChainTabs(chains,HOLDERS); renderChainPanel(activeChain,HOLDERS);
+  });
+}
+
+// Seçili zincirin verisini göster. Birincil zincir coin_holders'ta, diğerleri
+// coin_chain_holders'ta duruyor — ikisi de aynı alanlara sahip, tek render yolu.
+function renderChainPanel(chain,h){
+  const body=document.getElementById('holdersBody'), empty=document.getElementById('holdersEmpty');
+  const chains=h.chains||[];
+  const meta=chains.find(c=>c.chain===chain)||null;
+  const rows=new Map((h.chainRows||[]).map(r=>[r.chain,r]));
+  // Birincil zincirde coin_holders daha zengin (tiers/depth alanları) → onu tercih et
+  const d = (h.data && h.data.chain===chain) ? h.data : (rows.get(chain)||null);
+
+  const supTxt = meta && meta.supplyPct!=null ? ` · arz payı %${Number(meta.supplyPct).toFixed(1)}` : '';
+  document.getElementById('holdersMeta').textContent =
+    `· ${chain||''}${d&&d.fetched_at?` · ${new Date(d.fetched_at).toLocaleString('tr-TR')}`:''}${supTxt}`;
 
   if(!d){
     body.style.display='none'; empty.style.display='';
-    empty.textContent = h.canFetch
-      ? 'Holder verisi henüz çekilmedi.'
-      : `${h.chain||'Bu'} zincirinde otomatik çekim yok — explorer'dan bakabilirsin.`;
-    document.getElementById('holdersMeta').textContent = h.chain ? `· ${h.chain}` : '';
+    empty.textContent = meta && !meta.supported
+      ? `${chain} zincirinde otomatik çekim yok — explorer'dan bakabilirsin.`
+      : `${chain} için holder verisi çekilmedi.${chains.filter(c=>c.supported).length>1?' "Tüm ağları çek" ile doldurabilirsin.':''}`;
     return;
   }
+  renderHolderData(d, meta);
+}
+
+function renderHolderData(d, meta){
+  const body=document.getElementById('holdersBody'), empty=document.getElementById('holdersEmpty');
 
   empty.style.display='none'; body.style.display='';
-  const when=d.fetched_at?new Date(d.fetched_at).toLocaleString('tr-TR'):'—';
-  document.getElementById('holdersMeta').textContent=`· ${d.chain||''} · ${d.explorer||''} · ${when}`;
-
+  // Başlık satırını renderChainPanel yazdı (zincir + tarih + arz payı) — burada dokunma.
   const flags=(d.risk_flags?String(d.risk_flags).split(','):[]).filter(Boolean);
   const riskHtml=d.risk_level
     ? `<span class="risk r-${d.risk_level}">${RISK_LABEL[d.risk_level]||d.risk_level}</span>`
@@ -323,6 +385,10 @@ function renderHolders(h){
       N(d.circ_ratio)!=null&&N(d.circ_ratio)<0.3?'neg':''],
     ['Konsantrasyon riski', riskHtml],
   ];
+  // Bu zincirin global arz içindeki payı — oranların hangi dilimi anlattığını söyler.
+  // Düşükse (ör. %1) buradaki konsantrasyon tokenin küçük bir parçası hakkındadır.
+  const sp = meta && meta.supplyPct!=null ? Number(meta.supplyPct) : null;
+  if(sp!=null) kpis.splice(5,0,['Bu zincirdeki arz payı', sp.toFixed(1)+'%', sp<10?'neg':'']);
   document.getElementById('holdersKpis').innerHTML=
     kpis.map(k=>`<div class="kpi"><div class="label">${k[0]}</div><div class="value ${k[2]||''}">${k[1]}</div></div>`).join('')+
     (flags.length?`<div class="kpi"><div class="label">Bayraklar</div><div class="value" style="font-size:12px;color:#fbbf24">${flags.map(f=>FLAG_LABEL[f]||f).join(', ')}</div></div>`:'');
@@ -771,6 +837,24 @@ document.getElementById('btnHolders').onclick=async function(){
     await load();   // sayfayı tazele (KPI + grafikler + AI kartı tutarlı kalsın)
   }catch(e){
     alert('Holder verisi çekilemedi: '+e.message);
+    btn.disabled=false; btn.textContent=old;
+  }
+};
+
+document.getElementById('btnChains').onclick=async function(){
+  const btn=this, old=btn.textContent;
+  btn.disabled=true; btn.innerHTML='<span class="spin">⟳</span> tüm ağlar çekiliyor…';
+  try{
+    const r=await fetch(`${API}/holders/${symbol}/chains`,{method:'POST'});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(j.error||('Hata '+r.status));
+    if(j.failed&&j.failed.length)
+      alert('Bazı ağlar çekilemedi:\n'+j.failed.map(f=>`${f.chain}: ${f.error}`).join('\n'));
+    activeChain=null;   // en yüksek arzlı zincire dön
+    await load();
+  }catch(e){
+    alert('Ağlar çekilemedi: '+e.message);
+  }finally{
     btn.disabled=false; btn.textContent=old;
   }
 };
