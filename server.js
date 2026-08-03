@@ -140,6 +140,7 @@ const FABLE_ACCOUNTS = {
   ahk:  ['default', 'ahk'],
   ado:  ['ado'],
   faik: ['faik'],
+  ns:   ['ns'],
 };
 
 const EXCHANGE_CONFIG = {
