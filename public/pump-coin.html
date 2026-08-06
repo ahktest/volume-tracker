@@ -258,6 +258,19 @@ function render(d){
     ['Mcap', fmtMcap(m.mcap_usd)],
     ['Fut geçmiş', (m.fut_history_days??'—')+' g'],
   ];
+  // SuperTrend — her iki modda da en üstte, "Son fiyat"ın hemen yanında.
+  // Yön + kaç bardır sürdüğü + çizgiye uzaklık: uzaklık küçüldükçe dönüşe yaklaşılıyor.
+  const stn=d.stNow;
+  if(stn && stn.st_dir!=null){
+    const up=stn.st_dir===1;
+    const cfgTxt=d.stCfg?`(${d.stCfg.period},${d.stCfg.mult})`:'';
+    kpi.splice(1,0,['SuperTrend '+cfgTxt,
+      `${up?'▲ YUKARI':'▼ AŞAĞI'} <span class="muted" style="font-size:12px;font-weight:400">· ${stn.st_bars} bar</span>`,
+      up?'pos':'neg']);
+    kpi.splice(2,0,['ST çizgisi',
+      `${fmtPrice(stn.st)} <span class="muted" style="font-size:12px;font-weight:400">· %${Math.abs(stn.st_dist_pct).toFixed(1)} ${up?'üstünde':'altında'}</span>`,
+      '']);
+  }
   document.getElementById('kpis').innerHTML=kpi.map(k=>`<div class="kpi"><div class="label">${k[0]}</div><div class="value ${k[2]||''}">${k[1]}</div></div>`).join('');
 
   renderChart(d,m);
@@ -519,6 +532,32 @@ function renderChart(d,m){
     : 'Fiyat (futures, son 365g) — konsolidasyon bandı';
   const ds=[{label:'Futures',data:labels.map(l=>fm.has(l)?fm.get(l):null),borderColor:'#4ade80',backgroundColor:'#4ade8018',borderWidth:1.6,pointRadius:0,fill:false,tension:.15,spanGaps:true}];
   if(alpha.length) ds.push({label:'Alpha',data:labels.map(l=>am.has(l)?am.get(l):null),borderColor:'#d946ef',backgroundColor:'#d946ef18',borderWidth:1.6,pointRadius:0,fill:false,tension:.15,spanGaps:true});
+  // ── SuperTrend bindirmesi ──
+  // Çizgi yukarı trendde fiyatın altında (destek), aşağıda üstünde (direnç). Segment rengi
+  // yöne göre: Chart.js `segment.borderColor` her parçayı ayrı boyayabiliyor, böylece
+  // dönüş noktaları tek dataset içinde renk değiştirerek görünüyor.
+  const stArr=d.st||[], stDirArr=d.stDir||[];
+  if(stArr.length){
+    const stm=new Map(), dirm=new Map();
+    klines.forEach((k,i)=>{ const key=dayStr(k.t);
+      if(stArr[i]!=null){ stm.set(key,stArr[i]); dirm.set(key,stDirArr[i]); } });
+    const dirAt=i=>dirm.get(labels[i]);
+    const cfgTxt=d.stCfg?`(${d.stCfg.period},${d.stCfg.mult})`:'';
+    ds.push({
+      label:'SuperTrend '+cfgTxt,
+      data:labels.map(l=>stm.has(l)?stm.get(l):null),
+      borderColor:'#22c55e', borderWidth:1.8, pointRadius:0, fill:false, spanGaps:false,
+      // tension YOK: bant kilitlendiği için yatay platolar var, eğri onları bozar
+      segment:{ borderColor: ctx => {
+        // Dönüş barında iki uç farklı yönde → kopukluk gibi görünsün diye şeffaf
+        const a=dirAt(ctx.p0DataIndex), b=dirAt(ctx.p1DataIndex);
+        if(a==null||b==null) return 'transparent';
+        if(a!==b) return 'transparent';
+        return a===1 ? '#22c55e' : '#f87171';
+      }},
+    });
+  }
+
   const mid=N(m.cons_mid);
   if(mid!=null){
     const band=0.30;

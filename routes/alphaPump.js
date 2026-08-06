@@ -6,7 +6,7 @@ const refresh = require('../lib/refresh');
 const live = require('../lib/live');
 const cfg = require('../lib/config');
 const { computeRsi } = require('../lib/rsi');
-const { stochRsiSeries } = require('../lib/tech');
+const { stochRsiSeries, superTrendSeries, superTrend } = require('../lib/tech');
 const holders = require('../lib/holders');
 
 module.exports = (pool) => {
@@ -85,7 +85,8 @@ module.exports = (pool) => {
         SELECT t.symbol, t.timeframe, t.rsi14, t.rsi_ma, t.rsi_cross_bars_ago,
                t.ma50, t.ma200, t.ma_cross_bars_ago, t.ma_source,
                t.macd, t.macd_signal, t.macd_hist, t.macd_cross_bars_ago,
-               t.stoch_k, t.stoch_d, t.stoch_cross_bars_ago, t.updated_at,
+               t.stoch_k, t.stoch_d, t.stoch_cross_bars_ago,
+               t.st, t.st_dir, t.st_bars, t.st_dist_pct, t.updated_at,
                cm.dist_lo7, cm.ret7d, cm.ret30d, cm.consolidation_days, cm.last_price,
                cm.is_sleeping, cm.fut_ath_age_days,
                (cm.symbol IS NOT NULL) AS in_metrics,
@@ -306,10 +307,15 @@ module.exports = (pool) => {
       }
       // RSI(14) + ortalaması + StochRSI (%K/%D) — grafik alt-panelleri, klines ile hizalı
       let rsi = [], rsiMa = [], stochK = [], stochD = [];
+      let st = [], stDir = [], stNow = null;
       if (klines.length) {
         const closes = klines.map(k => k.c);
         const r = computeRsi(closes); rsi = r.rsi; rsiMa = r.ma;
         const s = stochRsiSeries(closes); stochK = s.k; stochD = s.d;
+        // SuperTrend — fiyat grafiğine bindirilir (yön rengiyle) + KPI notu
+        const highs = klines.map(k => k.h), lows = klines.map(k => k.l);
+        const sd = superTrendSeries(highs, lows, closes); st = sd.st; stDir = sd.dir;
+        stNow = superTrend(highs, lows, closes);
       }
       // Çoklu dilim teknik sinyalleri (bu coin için) — tech-only modda ana içerik
       let techRows = [];
@@ -322,7 +328,9 @@ module.exports = (pool) => {
       let holdersOut = { data: null, chain: null, canFetch: false, explorerUrl: null };
       try { holdersOut = await holders.getForCoin(pool, symbol); }
       catch (e) { console.error('[pump/coin] holders hatası:', e.message); }
-      res.json({ metrics: metricsOut, techOnly, events, klines, alphaKlines, rsi, rsiMa, stochK, stochD, techRows, holders: holdersOut });
+      res.json({ metrics: metricsOut, techOnly, events, klines, alphaKlines, rsi, rsiMa, stochK, stochD,
+                 st, stDir, stNow, stCfg: { period: cfg.ST_PERIOD, mult: cfg.ST_MULT },
+                 techRows, holders: holdersOut });
     } catch (err) {
       console.error('[pump/coin] hata:', err);
       res.status(500).json({ error: err.message });

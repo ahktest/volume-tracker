@@ -217,6 +217,14 @@
           <option value="nonalpha">alpha dışı</option>
         </select></label>
       <label class="pill check" title="Sadece RSI↑ + Golden Cross + MACD boğa — üçü de pozitif olanlar"><input type="checkbox" id="t_allpos"> sadece hepsi pozitif</label>
+      <label class="pill" title="SuperTrend (ATR 10/3) yönü. 'yeni döndü' = son 3 bar içinde yön değiştirenler.">SuperTrend
+        <select id="t_st">
+          <option value="" selected>hepsi</option>
+          <option value="up">▲ yukarı</option>
+          <option value="down">▼ aşağı</option>
+          <option value="fresh_up">▲ yeni döndü</option>
+          <option value="fresh_down">▼ yeni döndü</option>
+        </select></label>
       <button class="btn btn-primary admin-only" id="btnTechRefresh" style="padding:6px 12px;font-size:12px" title="Tüm futures (~500) için teknik sinyalleri yeniden hesapla">↻ Teknik taramayı güncelle</button>
       <span class="status-line" id="techProg" style="margin:0"></span>
     </div>
@@ -483,7 +491,16 @@ const stochWeak = t => { const k=N(t.stoch_k), d=N(t.stoch_d); return k!==null &
 // StochRSI pozitif: aşırı satımda (<10) taze %K/%D yukarı kesişi VE şu an %K ≥ %D.
 const stochPos = (t,meta) => { const b=N(t.stoch_cross_bars_ago); return b!==null && b<=meta.rsiCrossMaxBars && !stochWeak(t); };
 // Hepsi pozitif: RSI↑ + taze golden cross + MACD>0 + StochRSI↑
+// NOT: SuperTrend BİLEREK burada YOK — rozet ve filtre olarak eklendi ama kademeli
+// sıralamayı (tierOf/posCount) değiştirmemesi istendi.
 const allPositive = (t,meta) => rsiPos(t) && maPos(t,meta) && macdState(t)===1 && stochPos(t,meta);
+
+// ── SuperTrend (ATR 10/3) — yalnız rozet + filtre ──
+// st_dir: +1 yukarı (çizgi fiyatın altında, destek) / -1 aşağı (üstünde, direnç)
+// st_bars: güncel trendin süresi; küçükse trend YENİ dönmüş demektir.
+const stTrend = t => { const d=N(t.st_dir); return d===null?null:d; };
+const ST_FRESH_BARS = 3;   // "yeni döndü" eşiği (bar)
+const stFresh = t => { const b=N(t.st_bars); return b!==null && b<=ST_FRESH_BARS; };
 
 // kontrol edilen araç rozetleri (coin yanı)
 function techBadges(t,meta){
@@ -514,7 +531,20 @@ function techBadges(t,meta){
   else if(stochPos(t,meta)) stB='<span class="sig pos" title="StochRSI aşırı satımda (<10) %K yukarı kesti — ort. üstünde">ST↑</span>';
   else if(sb!==null && stochWeak(t)) stB='<span class="sig muted" title="StochRSI aşırı satımda kesti ama %K şu an %D altında (zayıf)">ST↑</span>';
   else stB='<span class="sig muted" title="StochRSI: taze aşırı satım kesişi yok">ST</span>';
-  return `${rsiB}${maB}${mcB}${stB}`;
+  // SuperTrend rozeti — "SPT" kısaltması bilerek: "ST" zaten StochRSI'da kullanılıyor.
+  const sd2=stTrend(t), sbars=N(t.st_bars), sdist=N(t.st_dist_pct);
+  let sptB;
+  if(sd2===null) sptB='<span class="sig muted" title="SuperTrend için yetersiz geçmiş">SPT?</span>';
+  else{
+    const u=unitOf(curTF);
+    const age=sbars!==null?` — ${sbars}${u} önce döndü`:'';
+    const dist=sdist!==null?` · fiyat çizgiden %${Math.abs(sdist).toFixed(1)} ${sd2===1?'üstte':'altta'}`:'';
+    const fresh=stFresh(t)?' 🔸':'';   // yeni dönüş işareti
+    sptB = sd2===1
+      ? `<span class="sig pos" title="SuperTrend YUKARI — çizgi fiyatın altında (destek)${age}${dist}">SPT▲${fresh}</span>`
+      : `<span class="sig neg" title="SuperTrend AŞAĞI — çizgi fiyatın üstünde (direnç)${age}${dist}">SPT▼${fresh}</span>`;
+  }
+  return `${rsiB}${maB}${mcB}${stB}${sptB}`;
 }
 
 // "Daha fazla yükle" durumu — sadece-RSI grubu açık mı
@@ -548,6 +578,12 @@ function renderTech(){
   if(maxRsi!==null) rows=rows.filter(r=>N(r.rsi14)!==null && N(r.rsi14)<=maxRsi);
   if(minStoch!==null) rows=rows.filter(r=>N(r.stoch_k)!==null && N(r.stoch_k)>=minStoch);
   if(maxStoch!==null) rows=rows.filter(r=>N(r.stoch_k)!==null && N(r.stoch_k)<=maxStoch);
+  // SuperTrend filtresi — yalnız satırları ELER, sıralamaya karışmaz
+  const stSel=document.getElementById('t_st').value;
+  if(stSel==='up')          rows=rows.filter(r=>stTrend(r)===1);
+  else if(stSel==='down')   rows=rows.filter(r=>stTrend(r)===-1);
+  else if(stSel==='fresh_up')   rows=rows.filter(r=>stTrend(r)===1 && stFresh(r));
+  else if(stSel==='fresh_down') rows=rows.filter(r=>stTrend(r)===-1 && stFresh(r));
   if(onlyAll) rows=rows.filter(r=>allPositive(r,meta));
   rows=sortRows(rows,'rsi_cross_bars_ago','tech');
 
@@ -815,7 +851,7 @@ window.addEventListener('hashchange',applyHash);
 applyHash();
 ['f_mag','f_phase','f_upbit','f_bybit','f_nonlisting'].forEach(id=>document.getElementById(id).addEventListener('input',renderPumps));
 ['s_cons','s_dist','s_mcap','s_phase'].forEach(id=>document.getElementById(id).addEventListener('input',renderSleep));
-['t_days','t_rsi_min','t_rsi','t_stoch_min','t_stoch_max','t_phase','t_allpos','t_universe'].forEach(id=>document.getElementById(id).addEventListener('input',renderTech));
+['t_days','t_rsi_min','t_rsi','t_stoch_min','t_stoch_max','t_phase','t_allpos','t_universe','t_st'].forEach(id=>document.getElementById(id).addEventListener('input',renderTech));
 ['a_search','a_universe'].forEach(id=>document.getElementById(id).addEventListener('input',renderAll));
 document.getElementById('btnRefresh').onclick=startRefresh;
 document.getElementById('btnTechRefresh').onclick=startTechRefresh;

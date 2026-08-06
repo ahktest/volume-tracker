@@ -70,6 +70,11 @@ CREATE TABLE IF NOT EXISTS coin_tech_signals (
     ['stoch_k', 'DECIMAL(6,2) NULL'],
     ['stoch_d', 'DECIMAL(6,2) NULL'],
     ['stoch_cross_bars_ago', 'INT NULL'],
+    // SuperTrend (ATR 10 / çarpan 3) — dilim başına yön + süre + çizgiye uzaklık
+    ['st', 'DECIMAL(38,18) NULL COMMENT "SuperTrend çizgisi"'],
+    ['st_dir', 'TINYINT NULL COMMENT "+1 yukarı / -1 aşağı"'],
+    ['st_bars', 'INT NULL COMMENT "güncel trend kaç bardır sürüyor (dönüş barı=0)"'],
+    ['st_dist_pct', 'DECIMAL(8,2) NULL COMMENT "fiyatın çizgiye uzaklığı %"'],
   ]) {
     try {
       await pool.query(`ALTER TABLE coin_tech_signals ADD COLUMN \`${name}\` ${def}`);
