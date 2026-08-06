@@ -530,7 +530,8 @@ function renderChart(d,m){
   document.getElementById('chartTitle').textContent = alpha.length
     ? 'Futures vs Alpha (son 365g) — konsolidasyon bandı'
     : 'Fiyat (futures, son 365g) — konsolidasyon bandı';
-  const ds=[{label:'Futures',data:labels.map(l=>fm.has(l)?fm.get(l):null),borderColor:'#4ade80',backgroundColor:'#4ade8018',borderWidth:1.6,pointRadius:0,fill:false,tension:.15,spanGaps:true}];
+  // Fiyat BEYAZ: SuperTrend yeşil/kırmızı boyandığı için fiyat da yeşil olunca karışıyordu.
+  const ds=[{label:'Futures',data:labels.map(l=>fm.has(l)?fm.get(l):null),borderColor:'#e5e7eb',backgroundColor:'#e5e7eb18',borderWidth:1.6,pointRadius:0,fill:false,tension:.15,spanGaps:true}];
   if(alpha.length) ds.push({label:'Alpha',data:labels.map(l=>am.has(l)?am.get(l):null),borderColor:'#d946ef',backgroundColor:'#d946ef18',borderWidth:1.6,pointRadius:0,fill:false,tension:.15,spanGaps:true});
   // ── SuperTrend bindirmesi ──
   // Çizgi yukarı trendde fiyatın altında (destek), aşağıda üstünde (direnç). Segment rengi
